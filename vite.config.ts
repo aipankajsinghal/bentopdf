@@ -202,7 +202,51 @@ export default defineConfig(({ mode }) => ({
         'pdf-to-webp': resolve(__dirname, 'src/pages/pdf-to-webp.html'),
 
       },
+      output: {
+        // Manual chunking for better code splitting
+        manualChunks: (id) => {
+          // Vendor chunks
+          if (id.includes('node_modules')) {
+            if (id.includes('pdfjs-dist')) {
+              return 'vendor-pdfjs';
+            }
+            if (id.includes('pdf-lib')) {
+              return 'vendor-pdf-lib';
+            }
+            if (id.includes('tesseract')) {
+              return 'vendor-ocr';
+            }
+            if (id.includes('heic2any')) {
+              return 'vendor-heic';
+            }
+            if (id.includes('cropperjs')) {
+              return 'vendor-cropper';
+            }
+            if (id.includes('jszip')) {
+              return 'vendor-jszip';
+            }
+            // Other vendor dependencies
+            return 'vendor';
+          }
+        },
+        // Optimize chunk file names
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
     },
+    // Performance optimizations
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.logs in production
+        drop_debugger: true,
+      },
+    },
+    // Increase chunk size warning limit
+    chunkSizeWarningLimit: 1000,
+    // Enable CSS code splitting
+    cssCodeSplit: true,
   },
   test: {
     globals: true,

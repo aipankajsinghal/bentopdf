@@ -1,0 +1,64 @@
+/* Critical CSS - Inline this in HTML head for faster first paint */
+@layer base {
+  body {
+    font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+    background-color: #111827;
+    color: #d1d5db;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Navigation - Critical for LCP */
+nav {
+  background-color: #1f2937;
+  border-bottom: 1px solid #374151;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+/* Tool cards - Critical for FCP */
+.tool-card {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  border: 1px solid #374151;
+  background-color: #1f2937;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.tool-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2),
+              0 4px 6px -2px rgba(0, 0, 0, 0.1);
+  border-color: #4f46e5;
+}
+
+/* Spinner - Reduce layout shift */
+.solid-spinner {
+  width: 64px;
+  height: 64px;
+  border: 5px solid #374151;
+  border-bottom-color: #4f46e5;
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Button critical styles */
+.btn {
+  transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}

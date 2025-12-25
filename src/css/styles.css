@@ -1,7 +1,10 @@
+/* Critical fonts - load immediately */
 @import '@fontsource/dm-sans/400.css';
-@import '@fontsource/dm-sans/500.css';
 @import '@fontsource/dm-sans/600.css';
 @import '@fontsource/dm-sans/700.css';
+
+/* Non-critical fonts - can be loaded lazily */
+@import '@fontsource/dm-sans/500.css';
 @import '@fontsource/dancing-script/400.css';
 @import '@fontsource/great-vibes/400.css';
 @import '@fontsource/kalam/300.css';
@@ -16,6 +19,11 @@
 @import '@fontsource/cedarville-cursive/400.css';
 @import 'cropperjs/dist/cropper.css';
 @import 'tailwindcss';
+
+/* Font display optimization */
+@font-face {
+  font-display: swap; /* Ensure text remains visible during font load */
+}
 
 @theme {
   --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
@@ -57,16 +65,39 @@ body {
 .tool-card {
   transition:
     transform 0.2s ease-in-out,
-    box-shadow 0.2s ease-in-out;
+    box-shadow 0.2s ease-in-out,
+    border-color 0.2s ease-in-out;
   border: 1px solid #374151;
+  /* Use will-change sparingly for animated elements */
+  will-change: transform;
+  /* GPU acceleration for smoother animations */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .tool-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-5px) translateZ(0);
   box-shadow:
     0 10px 15px -3px rgba(0, 0, 0, 0.2),
     0 4px 6px -2px rgba(0, 0, 0, 0.1);
   border-color: #4f46e5;
+}
+
+/* Add loading skeleton for better perceived performance */
+.tool-card.loading {
+  background: linear-gradient(
+    90deg,
+    #1f2937 25%,
+    #374151 50%,
+    #1f2937 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 .btn {
@@ -575,6 +606,44 @@ button:disabled,
   visibility: visible;
 }
 
+/* Improved focus states for accessibility */
+*:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Smooth page transitions */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Enhanced drag and drop visual feedback */
+.drop-zone {
+  border: 2px dashed #4f46e5;
+  background-color: rgba(79, 70, 229, 0.1);
+  transition: all 0.3s ease;
+}
+
+.drop-zone.drag-over {
+  border-color: #6366f1;
+  background-color: rgba(99, 102, 241, 0.2);
+  transform: scale(1.02);
+}
+
 .bg-grid-pattern {
   position: absolute;
   inset: 0;
@@ -598,4 +667,78 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none; /* Chrome, Safari, Edge */
   margin: 0;
+}
+
+/* Performance optimizations for animations */
+.tool-card,
+.btn,
+.modal,
+#scroll-to-top-btn {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Improved button states */
+.btn:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Loading state for buttons */
+.btn.loading {
+  position: relative;
+  color: transparent;
+  pointer-events: none;
+}
+
+.btn.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  border-right-color: transparent;
+  animation: spin 0.6s linear infinite;
+}
+
+/* Improved modal animations */
+.modal-enter {
+  animation: modal-enter 0.3s ease-out;
+}
+
+.modal-exit {
+  animation: modal-exit 0.3s ease-out;
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modal-exit {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(-20px);
+  }
 }

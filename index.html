@@ -5,6 +5,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BentoPDF - The Privacy First PDF Toolkit</title>
+  
+  <!-- Preconnect to external domains for faster resource loading -->
+  <link rel="preconnect" href="https://api.github.com" crossorigin>
+  <link rel="dns-prefetch" href="https://api.github.com">
+  
   <!-- i18n: hreflang tags for SEO -->
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="alternate" hreflang="en" href="/en/" />
@@ -22,7 +27,7 @@
     <div class="container mx-auto px-4">
       <div class="flex justify-between items-center h-16">
         <div class="flex-shrink-0 flex items-center cursor-pointer" id="home-logo">
-          <img src="/images/favicon.svg" alt="Bento PDF Logo" class="h-8 w-8" />
+          <img src="/images/favicon.svg" alt="Bento PDF Logo" class="h-8 w-8" loading="eager" />
           <span class="text-white font-bold text-xl ml-2">
             <a href="index.html">BentoPDF</a>
           </span>
@@ -155,7 +160,7 @@
 
           <!-- Google -->
           <svg class="h-6 md:h-8 w-auto text-gray-400 hover:text-white transition-colors" viewBox="0 0 24 24"
-            fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+            fill="currentColor" xmlns="http://www.w3.org/2000/svg" loading="lazy" aria-label="Google">
             <path
               d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .533 5.347.533 12S5.867 24 12.48 24c3.44 0 6.013-1.133 8.053-3.227 2.107-2.08 2.72-5.027 2.72-7.44 0-.733-.053-1.44-.16-2.133h-10.613z" />
           </svg>
