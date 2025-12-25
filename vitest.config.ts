@@ -9,8 +9,6 @@ export default defineConfig({
     // Simulate browser environment
     environment: 'jsdom',
 
-    // Setup files to run before tests
-    setupFiles: ['./src/tests/setup.ts'],
 
     // Coverage configuration
     coverage: {
