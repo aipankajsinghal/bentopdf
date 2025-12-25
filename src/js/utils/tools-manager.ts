@@ -197,19 +197,36 @@ export class ToolsManager {
   }
 
   /**
+   * Escape HTML to prevent XSS
+   */
+  private static escapeHtml(unsafe: string): string {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  /**
    * Create a quick access card for a tool
    */
   private static createQuickAccessCard(tool: ToolUsage, isFavorite: boolean): string {
+    const escapedPath = this.escapeHtml(tool.path);
+    const escapedName = this.escapeHtml(tool.name);
+    
     return `
-      <a href="${tool.path}" 
-         class="group quick-access-card bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-indigo-500 rounded-lg p-3 transition-all duration-200 hover:shadow-lg hover:-translate-y-1">
+      <a href="${escapedPath}" 
+         class="group quick-access-card bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-indigo-500 rounded-lg p-3 transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
+         data-tool-path="${escapedPath}"
+         data-tool-name="${escapedName}">
         <div class="flex items-start justify-between mb-2">
           <svg class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
           ${isFavorite ? `
-            <button onclick="event.preventDefault(); ToolsManager.toggleFavorite('${tool.path}', '${tool.name}')" 
-                    class="text-yellow-400 hover:text-yellow-300 transition-colors">
+            <button class="favorite-toggle-btn text-yellow-400 hover:text-yellow-300 transition-colors"
+                    aria-label="Remove from favorites">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
               </svg>
@@ -217,7 +234,7 @@ export class ToolsManager {
           ` : ''}
         </div>
         <p class="text-sm font-medium text-white group-hover:text-indigo-300 transition-colors line-clamp-2">
-          ${tool.name}
+          ${escapedName}
         </p>
       </a>
     `;
@@ -239,6 +256,24 @@ export class ToolsManager {
         toolsHeader.before(newUI);
       }
     }
+    
+    // Add event delegation for favorite buttons
+    newUI.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const button = target.closest('.favorite-toggle-btn');
+      
+      if (button) {
+        e.preventDefault();
+        const card = button.closest('a');
+        if (card) {
+          const toolPath = card.getAttribute('data-tool-path');
+          const toolName = card.getAttribute('data-tool-name');
+          if (toolPath && toolName) {
+            this.toggleFavorite(toolPath, toolName);
+          }
+        }
+      }
+    });
   }
 
   /**

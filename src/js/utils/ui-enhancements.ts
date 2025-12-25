@@ -23,21 +23,31 @@ export function showLoadingSkeleton(container: HTMLElement) {
 export function createProgressIndicator(message: string = 'Processing...'): HTMLElement {
   const container = document.createElement('div');
   container.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
-  container.innerHTML = `
-    <div class="bg-gray-800 p-8 rounded-lg flex flex-col items-center gap-4 border border-gray-700 shadow-xl max-w-md">
-      <div class="relative w-16 h-16">
-        <svg class="animate-spin h-16 w-16 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      </div>
-      <p class="text-white text-lg font-medium">${message}</p>
-      <div class="w-full bg-gray-700 rounded-full h-2">
-        <div class="progress-bar bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-      </div>
-      <p class="text-gray-400 text-sm">Please wait...</p>
+  
+  const innerDiv = document.createElement('div');
+  innerDiv.className = 'bg-gray-800 p-8 rounded-lg flex flex-col items-center gap-4 border border-gray-700 shadow-xl max-w-md';
+  
+  innerDiv.innerHTML = `
+    <div class="relative w-16 h-16">
+      <svg class="animate-spin h-16 w-16 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
     </div>
+    <p class="message-text text-white text-lg font-medium"></p>
+    <div class="w-full bg-gray-700 rounded-full h-2">
+      <div class="progress-bar bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+    </div>
+    <p class="text-gray-400 text-sm">Please wait...</p>
   `;
+  
+  // Set message safely using textContent
+  const messageEl = innerDiv.querySelector('.message-text');
+  if (messageEl) {
+    messageEl.textContent = message;
+  }
+  
+  container.appendChild(innerDiv);
   return container;
 }
 
@@ -143,9 +153,15 @@ export function showToast(message: string, type: 'success' | 'error' | 'info' = 
 
   toast.className = `fixed bottom-4 right-4 ${bgColors[type]} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 animate-slide-in`;
   toast.innerHTML = `
-    <span class="text-2xl">${icons[type]}</span>
-    <span class="font-medium">${message}</span>
+    <span class="text-2xl" aria-hidden="true">${icons[type]}</span>
+    <span class="message-text font-medium"></span>
   `;
+  
+  // Set message safely using textContent
+  const messageEl = toast.querySelector('.message-text');
+  if (messageEl) {
+    messageEl.textContent = message;
+  }
 
   document.body.appendChild(toast);
 

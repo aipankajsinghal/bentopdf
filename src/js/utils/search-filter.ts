@@ -9,6 +9,7 @@ interface Tool {
   category: string;
   keywords?: string[];
   element?: HTMLElement;
+  searchableText?: string; // Cached lowercase searchable text
 }
 
 export class EnhancedSearch {
@@ -52,11 +53,19 @@ export class EnhancedSearch {
       const categoryEl = card.closest('[data-category]');
       
       if (nameEl && descEl) {
+        const name = nameEl.textContent || '';
+        const description = descEl.textContent || '';
+        const category = categoryEl?.getAttribute('data-category') || '';
+        
+        // Pre-compute and cache the searchable text in lowercase
+        const searchableText = `${name} ${description} ${category}`.toLowerCase();
+        
         this.tools.push({
-          name: nameEl.textContent || '',
-          description: descEl.textContent || '',
-          category: categoryEl?.getAttribute('data-category') || '',
+          name,
+          description,
+          category,
           element: card as HTMLElement,
+          searchableText, // Cached for performance
         });
       }
     });
@@ -77,7 +86,8 @@ export class EnhancedSearch {
 
   private fuzzySearch(searchTerm: string): Tool[] {
     return this.tools.filter(tool => {
-      const searchable = `${tool.name} ${tool.description} ${tool.category}`.toLowerCase();
+      // Use cached searchable text for better performance
+      const searchable = tool.searchableText || '';
       
       // Exact match
       if (searchable.includes(searchTerm)) {

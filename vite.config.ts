@@ -239,7 +239,7 @@ export default defineConfig(({ mode }) => ({
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: true, // Remove console.logs in production
+        drop_console: mode === 'production', // Only remove console.logs in production
         drop_debugger: true,
       },
     },

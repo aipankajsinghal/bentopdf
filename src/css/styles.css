@@ -670,14 +670,29 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 /* Performance optimizations for animations */
-.tool-card,
-.btn,
-.modal,
-#scroll-to-top-btn {
-  will-change: transform, opacity;
+.tool-card {
   transform: translateZ(0);
   backface-visibility: hidden;
   perspective: 1000px;
+}
+
+/* Only add will-change during hover/active state */
+.tool-card:hover,
+.tool-card:focus-within {
+  will-change: transform;
+}
+
+.btn:active {
+  will-change: transform;
+}
+
+.modal {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+#scroll-to-top-btn {
+  transform: translateZ(0);
 }
 
 /* Improved button states */
