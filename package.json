@@ -20,6 +20,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest watch",
+    "test:e2e": "playwright test",
     "build:docker": "vite build",
     "format": "prettier --write .",
     "update-version": "node scripts/update-version.js",
@@ -46,6 +47,7 @@
     "typescript": "~5.9.3",
     "vite": "^7.1.11",
     "vite-plugin-node-polyfills": "^0.24.0",
+    "@playwright/test": "^1.43.0",
     "vitest": "^3.2.4"
   },
   "dependencies": {

@@ -1,391 +1,290 @@
-import { categories } from './config/tools.js';
-import { dom, hideAlert } from './ui.js';
-import { ShortcutsManager } from './logic/shortcuts.js';
+// BentoPDF - File-First PDF Editor
+// Main entry point with Office-style ribbon UI
 import { createIcons, icons } from 'lucide';
 import * as pdfjsLib from 'pdfjs-dist';
 import '../css/styles.css';
-import { formatShortcutDisplay } from './utils/helpers.js';
+
+import { initRibbon, registerToolHandler, updateToolStates, setDocumentStateCallbacks } from './ribbon.js';
+import {
+  initDocumentManager,
+  openDocument,
+  getActiveDocument,
+  hasAnyDocument,
+  downloadActiveDocument,
+  undo,
+  redo,
+  setDocumentManagerCallbacks,
+} from './documentManager.js';
+import * as toolOps from './toolOperations.js';
+import {
+  initViewer,
+  refreshViewer,
+  clearViewer,
+  zoomIn,
+  zoomOut,
+  fitToPage,
+  nextPage,
+  prevPage,
+  toggleThumbnails,
+} from './viewer.js';
+import { setProcessing } from './state.js';
 
 // ============================================================================
-// Types
+// Drop Zone Setup
 // ============================================================================
 
-interface Tool {
-  href: string;
-  name: string;
-  icon: string;
-  subtitle: string;
-}
+function setupDropZone(): void {
+  const dropZone = document.getElementById('drop-zone');
+  const dropZoneInner = document.getElementById('drop-zone-inner');
+  const fileInput = document.getElementById('file-input') as HTMLInputElement;
 
-interface Category {
-  name: string;
-  tools: Tool[];
-}
+  if (!dropZone || !dropZoneInner || !fileInput) return;
 
-// ============================================================================
-// State Management
-// ============================================================================
+  // Click to open file dialog
+  dropZoneInner.addEventListener('click', () => {
+    fileInput.click();
+  });
 
-const PINNED_TOOLS_KEY = 'bentopdf-pinned-tools';
-const SIDEBAR_COLLAPSED_KEY = 'bentopdf-sidebar-collapsed';
-const EXPANDED_CATEGORIES_KEY = 'bentopdf-expanded-categories';
-
-function getPinnedTools(): string[] {
-  try {
-    const stored = localStorage.getItem(PINNED_TOOLS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePinnedTools(tools: string[]): void {
-  localStorage.setItem(PINNED_TOOLS_KEY, JSON.stringify(tools));
-}
-
-function togglePinnedTool(toolId: string): boolean {
-  const pinned = getPinnedTools();
-  const index = pinned.indexOf(toolId);
-  if (index === -1) {
-    pinned.push(toolId);
-    savePinnedTools(pinned);
-    return true; // now pinned
-  } else {
-    pinned.splice(index, 1);
-    savePinnedTools(pinned);
-    return false; // now unpinned
-  }
-}
-
-function isToolPinned(toolId: string): boolean {
-  return getPinnedTools().includes(toolId);
-}
-
-function getExpandedCategories(): string[] {
-  try {
-    const stored = localStorage.getItem(EXPANDED_CATEGORIES_KEY);
-    // Default: first category expanded
-    return stored ? JSON.parse(stored) : [categories[0]?.name || ''];
-  } catch {
-    return [categories[0]?.name || ''];
-  }
-}
-
-function saveExpandedCategories(cats: string[]): void {
-  localStorage.setItem(EXPANDED_CATEGORIES_KEY, JSON.stringify(cats));
-}
-
-function toggleCategoryExpanded(categoryName: string): boolean {
-  const expanded = getExpandedCategories();
-  const index = expanded.indexOf(categoryName);
-  if (index === -1) {
-    expanded.push(categoryName);
-    saveExpandedCategories(expanded);
-    return true;
-  } else {
-    expanded.splice(index, 1);
-    saveExpandedCategories(expanded);
-    return false;
-  }
-}
-
-function isCategoryExpanded(categoryName: string): boolean {
-  return getExpandedCategories().includes(categoryName);
-}
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-function getToolId(tool: Tool): string {
-  if (tool.href) {
-    const match = tool.href.match(/([^/]+)\.html$/);
-    return match ? match[1] : tool.href;
-  }
-  return 'unknown';
-}
-
-function getToolById(toolId: string): Tool | undefined {
-  for (const category of categories) {
-    for (const tool of category.tools) {
-      if (getToolId(tool) === toolId) {
-        return tool;
-      }
+  // File input change
+  fileInput.addEventListener('change', async () => {
+    const files = fileInput.files;
+    if (files && files.length > 0) {
+      await handleFiles(Array.from(files));
+      fileInput.value = ''; // Reset for next selection
     }
-  }
-  return undefined;
-}
+  });
 
-function fuzzyMatch(searchTerm: string, targetText: string): boolean {
-  if (!searchTerm) return true;
-  const search = searchTerm.toLowerCase();
-  const target = targetText.toLowerCase();
-
-  // Simple contains match
-  if (target.includes(search)) return true;
-
-  // Fuzzy character match
-  let searchIndex = 0;
-  for (let i = 0; i < target.length && searchIndex < search.length; i++) {
-    if (search[searchIndex] === target[i]) {
-      searchIndex++;
-    }
-  }
-  return searchIndex === search.length;
-}
-
-// ============================================================================
-// Sidebar Rendering
-// ============================================================================
-
-function createToolItem(tool: Tool, showUnpin: boolean = false): HTMLElement {
-  const toolId = getToolId(tool);
-  const isPinned = isToolPinned(toolId);
-
-  const item = document.createElement('a');
-  item.href = tool.href;
-  item.className = 'tool-item group flex items-center gap-2 px-2 py-1.5 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors text-sm';
-  item.dataset.toolId = toolId;
-
-  // Icon
-  const icon = document.createElement('i');
-  icon.className = 'w-4 h-4 text-gray-400 group-hover:text-indigo-400 flex-shrink-0';
-  icon.setAttribute('data-lucide', tool.icon);
-
-  // Name
-  const name = document.createElement('span');
-  name.className = 'flex-1 truncate';
-  name.textContent = tool.name;
-
-  // Pin/Unpin button
-  const pinBtn = document.createElement('button');
-  pinBtn.className = `pin-btn flex-shrink-0 p-0.5 rounded transition-all ${
-    showUnpin
-      ? 'text-gray-400 hover:text-red-400 opacity-100'
-      : isPinned
-        ? 'text-indigo-400 opacity-100'
-        : 'text-gray-500 opacity-0 group-hover:opacity-100 hover:text-indigo-400'
-  }`;
-  pinBtn.title = isPinned ? 'Unpin' : 'Pin to top';
-  pinBtn.innerHTML = showUnpin
-    ? '<i data-lucide="x" class="w-3.5 h-3.5"></i>'
-    : '<i data-lucide="pin" class="w-3.5 h-3.5"></i>';
-
-  pinBtn.addEventListener('click', (e) => {
+  // Drag and drop
+  const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    togglePinnedTool(toolId);
-    renderSidebar();
-  });
+    dropZoneInner.classList.add('border-indigo-500', 'bg-gray-800/50');
+  };
 
-  item.append(icon, name, pinBtn);
-  return item;
+  const handleDragLeave = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZoneInner.classList.remove('border-indigo-500', 'bg-gray-800/50');
+  };
+
+  const handleDrop = async (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZoneInner.classList.remove('border-indigo-500', 'bg-gray-800/50');
+
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      await handleFiles(Array.from(files));
+    }
+  };
+
+  dropZone.addEventListener('dragover', handleDragOver);
+  dropZone.addEventListener('dragleave', handleDragLeave);
+  dropZone.addEventListener('drop', handleDrop);
+
+  // Also handle drop on the entire viewer area
+  const viewerArea = document.getElementById('viewer-area');
+  if (viewerArea) {
+    viewerArea.addEventListener('dragover', handleDragOver);
+    viewerArea.addEventListener('dragleave', handleDragLeave);
+    viewerArea.addEventListener('drop', handleDrop);
+  }
 }
 
-function createCategorySection(category: Category): HTMLElement {
-  const section = document.createElement('div');
-  section.className = 'category-section';
-  section.dataset.category = category.name;
+async function handleFiles(files: File[]): Promise<void> {
+  const pdfFiles = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
 
-  const isExpanded = isCategoryExpanded(category.name);
-
-  // Header
-  const header = document.createElement('button');
-  header.className = 'category-header w-full flex items-center gap-2 px-2 py-2 text-left text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-md transition-colors';
-
-  const chevron = document.createElement('i');
-  chevron.className = `w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`;
-  chevron.setAttribute('data-lucide', 'chevron-right');
-
-  const title = document.createElement('span');
-  title.className = 'text-xs font-semibold uppercase tracking-wider';
-  title.textContent = category.name;
-
-  const count = document.createElement('span');
-  count.className = 'ml-auto text-xs text-gray-500';
-  count.textContent = `${category.tools.length}`;
-
-  header.append(chevron, title, count);
-
-  // Tools container
-  const toolsContainer = document.createElement('div');
-  toolsContainer.className = `category-tools pl-2 space-y-0.5 overflow-hidden transition-all ${isExpanded ? '' : 'hidden'}`;
-
-  category.tools.forEach(tool => {
-    toolsContainer.appendChild(createToolItem(tool));
-  });
-
-  // Toggle expand/collapse
-  header.addEventListener('click', () => {
-    const nowExpanded = toggleCategoryExpanded(category.name);
-    toolsContainer.classList.toggle('hidden', !nowExpanded);
-    chevron.classList.toggle('rotate-90', nowExpanded);
-  });
-
-  section.append(header, toolsContainer);
-  return section;
-}
-
-function renderPinnedSection(): void {
-  const pinnedSection = document.getElementById('pinned-section');
-  const pinnedContainer = document.getElementById('pinned-tools');
-  if (!pinnedSection || !pinnedContainer) return;
-
-  const pinnedIds = getPinnedTools();
-
-  if (pinnedIds.length === 0) {
-    pinnedSection.classList.add('hidden');
+  if (pdfFiles.length === 0) {
+    showAlert('Invalid File', 'Please select a PDF file.');
     return;
   }
 
-  pinnedSection.classList.remove('hidden');
-  pinnedContainer.innerHTML = '';
+  setProcessing(true);
 
-  pinnedIds.forEach(toolId => {
-    const tool = getToolById(toolId);
-    if (tool) {
-      pinnedContainer.appendChild(createToolItem(tool, true));
+  try {
+    for (const file of pdfFiles) {
+      await openDocument(file);
     }
-  });
-}
-
-function renderCategories(): void {
-  const container = document.getElementById('tool-categories');
-  if (!container) return;
-
-  container.innerHTML = '';
-
-  categories.forEach(category => {
-    container.appendChild(createCategorySection(category as Category));
-  });
-}
-
-function renderSidebar(): void {
-  renderPinnedSection();
-  renderCategories();
-  createIcons({ icons });
-}
-
-// ============================================================================
-// Search Functionality
-// ============================================================================
-
-function setupSearch(): void {
-  const searchInput = document.getElementById('sidebar-search') as HTMLInputElement;
-  if (!searchInput) return;
-
-  searchInput.addEventListener('input', () => {
-    const term = searchInput.value.trim();
-    filterTools(term);
-  });
-
-  // Keyboard shortcut: Ctrl/Cmd + K to focus search
-  window.addEventListener('keydown', (e) => {
-    const isMac = navigator.userAgent.toUpperCase().includes('MAC');
-    if ((isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      searchInput.focus();
-      searchInput.select();
-    }
-    // Escape to clear and blur
-    if (e.key === 'Escape' && document.activeElement === searchInput) {
-      searchInput.value = '';
-      filterTools('');
-      searchInput.blur();
-    }
-  });
-}
-
-function filterTools(searchTerm: string): void {
-  const pinnedSection = document.getElementById('pinned-section');
-  const categorySections = document.querySelectorAll('.category-section');
-
-  if (!searchTerm) {
-    // Reset to normal view
-    if (pinnedSection) {
-      const hasPinned = getPinnedTools().length > 0;
-      pinnedSection.classList.toggle('hidden', !hasPinned);
-    }
-
-    categorySections.forEach(section => {
-      section.classList.remove('hidden');
-      const tools = section.querySelectorAll('.tool-item');
-      tools.forEach(tool => tool.classList.remove('hidden'));
-
-      // Restore expand/collapse state
-      const categoryName = (section as HTMLElement).dataset.category || '';
-      const toolsContainer = section.querySelector('.category-tools');
-      const chevron = section.querySelector('.category-header i');
-      const isExpanded = isCategoryExpanded(categoryName);
-      toolsContainer?.classList.toggle('hidden', !isExpanded);
-      chevron?.classList.toggle('rotate-90', isExpanded);
-    });
-    return;
+    showViewerToolbar();
+  } catch (error) {
+    console.error('Error opening PDF:', error);
+    showAlert('Error', 'Failed to open PDF file. The file may be corrupted or password-protected.');
+  } finally {
+    setProcessing(false);
   }
+}
 
-  // Hide pinned section during search
-  pinnedSection?.classList.add('hidden');
-
-  // Filter and expand all categories
-  categorySections.forEach(section => {
-    const tools = section.querySelectorAll('.tool-item');
-    let hasVisibleTool = false;
-
-    tools.forEach(toolEl => {
-      const toolItem = toolEl as HTMLElement;
-      const toolName = toolItem.querySelector('span')?.textContent || '';
-      const toolId = toolItem.dataset.toolId || '';
-      const tool = getToolById(toolId);
-      const subtitle = tool?.subtitle || '';
-
-      const matches = fuzzyMatch(searchTerm, toolName) || fuzzyMatch(searchTerm, subtitle);
-      toolItem.classList.toggle('hidden', !matches);
-      if (matches) hasVisibleTool = true;
-    });
-
-    // Show/hide category based on matches
-    section.classList.toggle('hidden', !hasVisibleTool);
-
-    // Expand category if it has matches
-    if (hasVisibleTool) {
-      const toolsContainer = section.querySelector('.category-tools');
-      const chevron = section.querySelector('.category-header i');
-      toolsContainer?.classList.remove('hidden');
-      chevron?.classList.add('rotate-90');
-    }
-  });
+function showViewerToolbar(): void {
+  const toolbar = document.getElementById('viewer-toolbar');
+  if (toolbar) {
+    toolbar.classList.remove('hidden');
+    toolbar.classList.add('flex');
+  }
 }
 
 // ============================================================================
-// Sidebar Toggle
+// Viewer Toolbar Setup
 // ============================================================================
 
-function setupSidebarToggle(): void {
-  const sidebar = document.getElementById('sidebar');
-  const toggleBtn = document.getElementById('sidebar-toggle');
-  const sidebarCollapsedToggle = document.getElementById('sidebar-collapsed-toggle') as HTMLInputElement;
+function setupViewerToolbar(): void {
+  const prevBtn = document.getElementById('prev-page-btn');
+  const nextBtn = document.getElementById('next-page-btn');
+  const zoomInBtn = document.getElementById('zoom-in-btn');
+  const zoomOutBtn = document.getElementById('zoom-out-btn');
+  const fitBtn = document.getElementById('fit-page-btn');
+  const downloadBtn = document.getElementById('download-btn');
+  const toggleThumbsBtn = document.getElementById('toggle-thumbnails-btn');
 
-  if (!sidebar || !toggleBtn) return;
+  prevBtn?.addEventListener('click', prevPage);
+  nextBtn?.addEventListener('click', nextPage);
+  zoomInBtn?.addEventListener('click', zoomIn);
+  zoomOutBtn?.addEventListener('click', zoomOut);
+  fitBtn?.addEventListener('click', fitToPage);
+  downloadBtn?.addEventListener('click', downloadActiveDocument);
+  toggleThumbsBtn?.addEventListener('click', toggleThumbnails);
+}
 
-  // Load saved preference
-  const savedCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
-  if (savedCollapsed) {
-    sidebar.classList.add('sidebar-collapsed');
-  }
+// ============================================================================
+// Tool Handlers Registration
+// ============================================================================
 
-  // Update preferences toggle
-  if (sidebarCollapsedToggle) {
-    sidebarCollapsedToggle.checked = savedCollapsed;
-    sidebarCollapsedToggle.addEventListener('change', (e) => {
-      const collapsed = (e.target as HTMLInputElement).checked;
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed.toString());
-    });
-  }
-
-  toggleBtn.addEventListener('click', () => {
-    const isCollapsed = sidebar.classList.toggle('sidebar-collapsed');
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, isCollapsed.toString());
+function registerToolHandlers(): void {
+  // File operations
+  registerToolHandler('open-file', () => {
+    const fileInput = document.getElementById('file-input') as HTMLInputElement;
+    fileInput?.click();
   });
+
+  registerToolHandler('download', downloadActiveDocument);
+  registerToolHandler('add-pdf', () => {
+    // Open file dialog for adding another PDF; if a doc is active, merge, otherwise open
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf,.pdf';
+    input.multiple = true;
+    input.onchange = async () => {
+      if (!input.files || input.files.length === 0) return;
+      const files = Array.from(input.files);
+      const active = getActiveDocument();
+      if (active && typeof (toolOps as any).mergeFiles === 'function') {
+        await (toolOps as any).mergeFiles(files);
+      } else {
+        await handleFiles(files);
+      }
+    };
+    input.click();
+  });
+
+  // Undo/Redo
+  registerToolHandler('undo', async () => {
+    await undo();
+  });
+
+  registerToolHandler('redo', async () => {
+    await redo();
+  });
+
+  // Zoom controls
+  registerToolHandler('zoom-in', zoomIn);
+  registerToolHandler('zoom-out', zoomOut);
+  registerToolHandler('fit-page', fitToPage);
+
+  // Page operations - wired to toolOperations where available
+  const toolOpAliases: Record<string, string> = {
+    'split-pdf': 'splitPDF',
+    'add-blank': 'addBlankPage',
+  };
+
+  const callToolOp = (opId: string, displayName: string) => {
+    const mapped = toolOpAliases[opId];
+    const fnName = mapped || opId.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    const fn = (toolOps as any)[fnName] || (toolOps as any)[opId];
+    if (typeof fn === 'function') return fn();
+    return showToolNotImplemented(displayName);
+  };
+
+  registerToolHandler('split-pdf', () => callToolOp('split-pdf', 'Split PDF'));
+  registerToolHandler('extract-pages', () => callToolOp('extract-pages', 'Extract Pages'));
+  registerToolHandler('delete-pages', () => callToolOp('delete-pages', 'Delete Pages'));
+  registerToolHandler('rotate-left', () => callToolOp('rotate-left', 'Rotate Left'));
+  registerToolHandler('rotate-right', () => callToolOp('rotate-right', 'Rotate Right'));
+  registerToolHandler('rotate-180', () => callToolOp('rotate-180', 'Rotate 180°'));
+  registerToolHandler('reverse-pages', () => callToolOp('reverse-pages', 'Reverse Pages'));
+  registerToolHandler('reorder', () => callToolOp('reorder', 'Reorder Pages'));
+  registerToolHandler('duplicate', () => callToolOp('duplicate', 'Duplicate Pages'));
+  registerToolHandler('add-blank', () => callToolOp('add-blank', 'Add Blank Page'));
+  registerToolHandler('crop', () => callToolOp('crop', 'Crop'));
+  registerToolHandler('n-up', () => callToolOp('n-up', 'N-Up'));
+  registerToolHandler('divide', () => callToolOp('divide', 'Divide Pages'));
+  registerToolHandler('combine-single', () => callToolOp('combine-single', 'Combine to Single'));
+
+  // Edit tools
+  registerToolHandler('annotate', () => callToolOp('annotate', 'Annotate'));
+  registerToolHandler('sign', () => callToolOp('sign', 'Sign PDF'));
+  registerToolHandler('stamps', () => callToolOp('stamps', 'Add Stamps'));
+  registerToolHandler('watermark', () => callToolOp('watermark', 'Watermark'));
+  registerToolHandler('page-numbers', () => callToolOp('page-numbers', 'Page Numbers'));
+  registerToolHandler('header-footer', () => callToolOp('header-footer', 'Header/Footer'));
+  registerToolHandler('bookmarks', () => callToolOp('bookmarks', 'Bookmarks'));
+  registerToolHandler('toc', () => callToolOp('toc', 'Table of Contents'));
+  registerToolHandler('fill-form', () => callToolOp('fill-form', 'Fill Form'));
+  registerToolHandler('create-form', () => callToolOp('create-form', 'Create Form'));
+
+  // Color operations
+  registerToolHandler('invert-colors', () => callToolOp('invert-colors', 'Invert Colors'));
+  registerToolHandler('background-color', () => callToolOp('background-color', 'Background Color'));
+  registerToolHandler('text-color', () => callToolOp('text-color', 'Text Color'));
+  registerToolHandler('greyscale', () => callToolOp('greyscale', 'Greyscale'));
+
+  // Cleanup
+  registerToolHandler('remove-annotations', () => callToolOp('remove-annotations', 'Remove Annotations'));
+  registerToolHandler('remove-blank-pages', () => callToolOp('remove-blank-pages', 'Remove Blank Pages'));
+
+  // Convert to PDF
+  registerToolHandler('image-to-pdf', () => callToolOp('image-to-pdf', 'Image to PDF'));
+  registerToolHandler('jpg-to-pdf', () => callToolOp('jpg-to-pdf', 'JPG to PDF'));
+  registerToolHandler('png-to-pdf', () => callToolOp('png-to-pdf', 'PNG to PDF'));
+  registerToolHandler('webp-to-pdf', () => callToolOp('webp-to-pdf', 'WebP to PDF'));
+  registerToolHandler('svg-to-pdf', () => callToolOp('svg-to-pdf', 'SVG to PDF'));
+  registerToolHandler('bmp-to-pdf', () => callToolOp('bmp-to-pdf', 'BMP to PDF'));
+  registerToolHandler('heic-to-pdf', () => callToolOp('heic-to-pdf', 'HEIC to PDF'));
+  registerToolHandler('tiff-to-pdf', () => callToolOp('tiff-to-pdf', 'TIFF to PDF'));
+  registerToolHandler('text-to-pdf', () => callToolOp('text-to-pdf', 'Text to PDF'));
+  registerToolHandler('json-to-pdf', () => callToolOp('json-to-pdf', 'JSON to PDF'));
+
+  // Convert from PDF
+  registerToolHandler('pdf-to-jpg', () => callToolOp('pdf-to-jpg', 'PDF to JPG'));
+  registerToolHandler('pdf-to-png', () => callToolOp('pdf-to-png', 'PDF to PNG'));
+  registerToolHandler('pdf-to-webp', () => callToolOp('pdf-to-webp', 'PDF to WebP'));
+  registerToolHandler('pdf-to-bmp', () => callToolOp('pdf-to-bmp', 'PDF to BMP'));
+  registerToolHandler('pdf-to-tiff', () => callToolOp('pdf-to-tiff', 'PDF to TIFF'));
+  registerToolHandler('pdf-to-json', () => callToolOp('pdf-to-json', 'PDF to JSON'));
+  registerToolHandler('ocr', () => callToolOp('ocr', 'OCR'));
+
+  // Security
+  registerToolHandler('encrypt', () => callToolOp('encrypt', 'Encrypt'));
+  registerToolHandler('decrypt', () => callToolOp('decrypt', 'Decrypt'));
+  registerToolHandler('permissions', () => callToolOp('permissions', 'Permissions'));
+  registerToolHandler('remove-restrictions', () => callToolOp('remove-restrictions', 'Remove Restrictions'));
+  registerToolHandler('sanitize', () => callToolOp('sanitize', 'Sanitize'));
+  registerToolHandler('remove-metadata', () => callToolOp('remove-metadata', 'Remove Metadata'));
+  registerToolHandler('flatten', () => callToolOp('flatten', 'Flatten'));
+
+  // Tools
+  registerToolHandler('compress', () => callToolOp('compress', 'Compress'));
+  registerToolHandler('linearize', () => callToolOp('linearize', 'Linearize'));
+  registerToolHandler('fix-size', () => callToolOp('fix-size', 'Fix Page Size'));
+  registerToolHandler('repair', () => callToolOp('repair', 'Repair'));
+  registerToolHandler('add-attachments', () => callToolOp('add-attachments', 'Add Attachments'));
+  registerToolHandler('extract-attachments', () => callToolOp('extract-attachments', 'Extract Attachments'));
+  registerToolHandler('edit-attachments', () => callToolOp('edit-attachments', 'Edit Attachments'));
+  registerToolHandler('metadata', () => callToolOp('metadata', 'Metadata'));
+  registerToolHandler('dimensions', () => callToolOp('dimensions', 'Page Dimensions'));
+  registerToolHandler('compare', () => callToolOp('compare', 'Compare PDFs'));
+}
+
+function showToolNotImplemented(toolName: string): void {
+  showAlert('Coming Soon', `The "${toolName}" tool will be implemented in the next phase of development.`);
 }
 
 // ============================================================================
@@ -393,14 +292,13 @@ function setupSidebarToggle(): void {
 // ============================================================================
 
 function setupSettingsModal(): void {
-  const openBtn = document.getElementById('open-shortcuts-btn');
-  const closeBtn = document.getElementById('close-shortcuts-modal');
-  const modal = document.getElementById('shortcuts-modal');
+  const settingsBtn = document.getElementById('settings-btn');
+  const closeBtn = document.getElementById('close-settings-modal');
+  const modal = document.getElementById('settings-modal');
 
-  if (!openBtn || !closeBtn || !modal) return;
+  if (!settingsBtn || !closeBtn || !modal) return;
 
-  openBtn.addEventListener('click', () => {
-    renderShortcutsList();
+  settingsBtn.addEventListener('click', () => {
     modal.classList.remove('hidden');
   });
 
@@ -414,245 +312,112 @@ function setupSettingsModal(): void {
     }
   });
 
-  // Tab switching
-  const shortcutsTabBtn = document.getElementById('shortcuts-tab-btn');
-  const preferencesTabBtn = document.getElementById('preferences-tab-btn');
-  const shortcutsTabContent = document.getElementById('shortcuts-tab-content');
-  const preferencesTabContent = document.getElementById('preferences-tab-content');
-  const shortcutsTabFooter = document.getElementById('shortcuts-tab-footer');
-  const preferencesTabFooter = document.getElementById('preferences-tab-footer');
-  const resetShortcutsBtn = document.getElementById('reset-shortcuts-btn');
-
-  if (shortcutsTabBtn && preferencesTabBtn) {
-    shortcutsTabBtn.addEventListener('click', () => {
-      shortcutsTabBtn.classList.add('bg-indigo-600', 'text-white');
-      shortcutsTabBtn.classList.remove('text-gray-300');
-      preferencesTabBtn.classList.remove('bg-indigo-600', 'text-white');
-      preferencesTabBtn.classList.add('text-gray-300');
-      shortcutsTabContent?.classList.remove('hidden');
-      preferencesTabContent?.classList.add('hidden');
-      shortcutsTabFooter?.classList.remove('hidden');
-      preferencesTabFooter?.classList.add('hidden');
-      resetShortcutsBtn?.classList.remove('hidden');
-    });
-
-    preferencesTabBtn.addEventListener('click', () => {
-      preferencesTabBtn.classList.add('bg-indigo-600', 'text-white');
-      preferencesTabBtn.classList.remove('text-gray-300');
-      shortcutsTabBtn.classList.remove('bg-indigo-600', 'text-white');
-      shortcutsTabBtn.classList.add('text-gray-300');
-      preferencesTabContent?.classList.remove('hidden');
-      shortcutsTabContent?.classList.add('hidden');
-      preferencesTabFooter?.classList.remove('hidden');
-      shortcutsTabFooter?.classList.add('hidden');
-      resetShortcutsBtn?.classList.add('hidden');
+  // Ribbon expanded toggle
+  const ribbonToggle = document.getElementById('ribbon-expanded-toggle') as HTMLInputElement;
+  if (ribbonToggle) {
+    ribbonToggle.checked = localStorage.getItem('ribbon-expanded') === 'true';
+    ribbonToggle.addEventListener('change', (e) => {
+      const expanded = (e.target as HTMLInputElement).checked;
+      localStorage.setItem('ribbon-expanded', expanded.toString());
+      // Re-render ribbon
+      initRibbon();
     });
   }
 
-  // Reset shortcuts
-  if (resetShortcutsBtn) {
-    resetShortcutsBtn.addEventListener('click', async () => {
-      if (confirm('Reset all shortcuts to defaults?')) {
-        ShortcutsManager.reset();
-        renderShortcutsList();
-      }
+  // Thumbnails toggle
+  const thumbsToggle = document.getElementById('show-thumbnails-toggle') as HTMLInputElement;
+  if (thumbsToggle) {
+    thumbsToggle.addEventListener('change', () => {
+      toggleThumbnails();
     });
   }
-
-  // Import/Export
-  const exportBtn = document.getElementById('export-shortcuts-btn');
-  const importBtn = document.getElementById('import-shortcuts-btn');
-
-  exportBtn?.addEventListener('click', () => {
-    ShortcutsManager.exportSettings();
-  });
-
-  importBtn?.addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const content = e.target?.result as string;
-          if (ShortcutsManager.importSettings(content)) {
-            renderShortcutsList();
-            alert('Shortcuts imported successfully!');
-          } else {
-            alert('Failed to import shortcuts. Invalid file format.');
-          }
-        };
-        reader.readAsText(file);
-      }
-    };
-    input.click();
-  });
-
-  // Shortcut search
-  const shortcutSearch = document.getElementById('shortcut-search') as HTMLInputElement;
-  shortcutSearch?.addEventListener('input', (e) => {
-    const term = (e.target as HTMLInputElement).value.toLowerCase();
-    const sections = document.querySelectorAll('#shortcuts-list .category-section');
-
-    sections.forEach(section => {
-      const items = section.querySelectorAll('.shortcut-item');
-      let visibleCount = 0;
-
-      items.forEach(item => {
-        const text = item.textContent?.toLowerCase() || '';
-        const isMatch = text.includes(term);
-        item.classList.toggle('hidden', !isMatch);
-        if (isMatch) visibleCount++;
-      });
-
-      section.classList.toggle('hidden', visibleCount === 0);
-    });
-  });
-}
-
-function renderShortcutsList(): void {
-  const container = document.getElementById('shortcuts-list');
-  if (!container) return;
-
-  container.innerHTML = '';
-  const allShortcuts = ShortcutsManager.getAllShortcuts();
-  const isMac = navigator.userAgent.toUpperCase().includes('MAC');
-  const allTools = categories.flatMap(c => c.tools);
-
-  categories.forEach(category => {
-    const section = document.createElement('div');
-    section.className = 'category-section mb-6 last:mb-0';
-
-    const header = document.createElement('h3');
-    header.className = 'text-gray-400 text-xs font-bold uppercase tracking-wider mb-3 pl-1';
-    header.textContent = category.name;
-    section.appendChild(header);
-
-    const itemsContainer = document.createElement('div');
-    itemsContainer.className = 'space-y-2';
-
-    category.tools.forEach(tool => {
-      const toolId = getToolId(tool as Tool);
-      const currentShortcut = allShortcuts.get(toolId) || '';
-
-      const item = document.createElement('div');
-      item.className = 'shortcut-item flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors';
-
-      const left = document.createElement('div');
-      left.className = 'flex items-center gap-3';
-
-      const icon = document.createElement('i');
-      icon.className = 'w-5 h-5 text-indigo-400';
-      icon.setAttribute('data-lucide', tool.icon);
-
-      const name = document.createElement('span');
-      name.className = 'text-gray-200 font-medium';
-      name.textContent = tool.name;
-
-      left.append(icon, name);
-
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'shortcut-input w-32 bg-gray-800 border border-gray-600 text-white text-center text-sm rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all';
-      input.placeholder = 'Click to set';
-      input.value = formatShortcutDisplay(currentShortcut, isMac);
-      input.readOnly = true;
-
-      input.onfocus = () => {
-        input.value = 'Press keys...';
-        input.classList.add('border-indigo-500');
-      };
-
-      input.onblur = () => {
-        input.value = formatShortcutDisplay(ShortcutsManager.getShortcut(toolId) || '', isMac);
-        input.classList.remove('border-indigo-500');
-      };
-
-      input.onkeydown = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (e.key === 'Backspace' || e.key === 'Delete') {
-          ShortcutsManager.setShortcut(toolId, '');
-          renderShortcutsList();
-          return;
-        }
-
-        const keys: string[] = [];
-        if (isMac) {
-          if (e.metaKey) keys.push('mod');
-          if (e.ctrlKey) keys.push('ctrl');
-        } else {
-          if (e.ctrlKey || e.metaKey) keys.push('mod');
-        }
-        if (e.altKey) keys.push('alt');
-        if (e.shiftKey) keys.push('shift');
-
-        let key = e.key.toLowerCase();
-        if (e.altKey && e.code) {
-          if (e.code.startsWith('Key')) {
-            key = e.code.slice(3).toLowerCase();
-          } else if (e.code.startsWith('Digit')) {
-            key = e.code.slice(5);
-          }
-        }
-
-        const isModifier = ['control', 'shift', 'alt', 'meta'].includes(key);
-        if (!isModifier) {
-          keys.push(key);
-          const combo = keys.join('+');
-
-          // Check for conflicts
-          const existingToolId = ShortcutsManager.findToolByShortcut(combo);
-          if (existingToolId && existingToolId !== toolId) {
-            const existingTool = allTools.find(t => getToolId(t as Tool) === existingToolId);
-            alert(`This shortcut is already assigned to "${existingTool?.name || existingToolId}"`);
-            input.blur();
-            return;
-          }
-
-          ShortcutsManager.setShortcut(toolId, combo);
-          renderShortcutsList();
-        }
-      };
-
-      item.append(left, input);
-      itemsContainer.appendChild(item);
-    });
-
-    section.appendChild(itemsContainer);
-    container.appendChild(section);
-  });
-
-  createIcons({ icons });
 }
 
 // ============================================================================
 // Alert Modal
 // ============================================================================
 
+function showAlert(title: string, message: string): void {
+  const modal = document.getElementById('alert-modal');
+  const titleEl = document.getElementById('alert-title');
+  const messageEl = document.getElementById('alert-message');
+
+  if (modal && titleEl && messageEl) {
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    modal.classList.remove('hidden');
+  }
+}
+
+// Bridge custom events from toolOperations to the built-in modal
+window.addEventListener('bentopdf-show-alert', (e: any) => {
+  const d = e?.detail || {};
+  showAlert(d.title || 'Notice', d.message || '');
+});
+
 function setupAlertModal(): void {
-  if (dom.alertOkBtn) {
-    dom.alertOkBtn.addEventListener('click', hideAlert);
+  const modal = document.getElementById('alert-modal');
+  const okBtn = document.getElementById('alert-ok');
+
+  if (okBtn) {
+    okBtn.addEventListener('click', () => {
+      modal?.classList.add('hidden');
+    });
+  }
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.classList.add('hidden');
+      }
+    });
   }
 }
 
 // ============================================================================
-// Full Width Mode
+// Keyboard Shortcuts
 // ============================================================================
 
-function setupFullWidthMode(): void {
-  const toggle = document.getElementById('full-width-toggle') as HTMLInputElement;
-  if (!toggle) return;
+function setupKeyboardShortcuts(): void {
+  document.addEventListener('keydown', async (e) => {
+    // Skip if in input
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      return;
+    }
 
-  const savedValue = localStorage.getItem('fullWidthMode') === 'true';
-  toggle.checked = savedValue;
+    const isMac = navigator.userAgent.toUpperCase().includes('MAC');
+    const mod = isMac ? e.metaKey : e.ctrlKey;
 
-  toggle.addEventListener('change', (e) => {
-    const enabled = (e.target as HTMLInputElement).checked;
-    localStorage.setItem('fullWidthMode', enabled.toString());
+    // Ctrl/Cmd + O - Open file
+    if (mod && e.key.toLowerCase() === 'o') {
+      e.preventDefault();
+      const fileInput = document.getElementById('file-input') as HTMLInputElement;
+      fileInput?.click();
+      return;
+    }
+
+    // Ctrl/Cmd + S - Download/Save
+    if (mod && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      if (getActiveDocument()) {
+        downloadActiveDocument();
+      }
+      return;
+    }
+
+    // Ctrl/Cmd + Z - Undo
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      await undo();
+      return;
+    }
+
+    // Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y - Redo
+    if ((mod && e.shiftKey && e.key.toLowerCase() === 'z') || (mod && e.key.toLowerCase() === 'y')) {
+      e.preventDefault();
+      await redo();
+      return;
+    }
   });
 }
 
@@ -664,23 +429,41 @@ const init = async () => {
   // Initialize PDF.js worker
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
-  // Render sidebar
-  renderSidebar();
+  // Wire up callbacks to avoid circular dependencies
+  setDocumentStateCallbacks(hasAnyDocument, getActiveDocument);
+  setDocumentManagerCallbacks(updateToolStates, refreshViewer, clearViewer);
 
-  // Setup features
-  setupSearch();
-  setupSidebarToggle();
+  // Register tool handlers before ribbon init
+  registerToolHandlers();
+
+  // Initialize ribbon UI
+  initRibbon();
+
+  // Initialize document manager
+  initDocumentManager();
+
+  // Initialize viewer
+  initViewer();
+
+  // Setup drop zone
+  setupDropZone();
+
+  // Setup viewer toolbar
+  setupViewerToolbar();
+
+  // Setup settings modal
   setupSettingsModal();
-  setupAlertModal();
-  setupFullWidthMode();
 
-  // Initialize shortcuts system
-  ShortcutsManager.init();
+  // Setup alert modal
+  setupAlertModal();
+
+  // Setup keyboard shortcuts
+  setupKeyboardShortcuts();
 
   // Initialize icons
   createIcons({ icons });
 
-  console.log('BentoPDF initialized');
+  console.log('BentoPDF initialized - File-First Edition');
 };
 
 window.addEventListener('load', init);
