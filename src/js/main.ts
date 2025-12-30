@@ -92,7 +92,9 @@ function setupDropZone(): void {
 }
 
 async function handleFiles(files: File[]): Promise<void> {
-  const pdfFiles = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+  const pdfFiles = files.filter(
+    (f) => f.type === 'application/pdf' && f.name.toLowerCase().endsWith('.pdf')
+  );
 
   if (pdfFiles.length === 0) {
     showAlert('Invalid File', 'Please select a PDF file.');

@@ -294,7 +294,38 @@ export function downloadActiveDocument(): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = doc.fileName.replace(/\.pdf$/i, '') + '_edited.pdf';
+  const sanitizedBase = doc.fileName
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replace(/\.pdf$/i, '')
+    .trim();
+  const reservedNames = new Set([
+    'CON',
+    'PRN',
+    'AUX',
+    'NUL',
+    'COM1',
+    'COM2',
+    'COM3',
+    'COM4',
+    'COM5',
+    'COM6',
+    'COM7',
+    'COM8',
+    'COM9',
+    'LPT1',
+    'LPT2',
+    'LPT3',
+    'LPT4',
+    'LPT5',
+    'LPT6',
+    'LPT7',
+    'LPT8',
+    'LPT9',
+  ]);
+  const safeBaseName = sanitizedBase && !reservedNames.has(sanitizedBase.toUpperCase())
+    ? sanitizedBase
+    : `document-${Date.now()}`;
+  a.download = `${safeBaseName}_edited.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 
@@ -317,45 +348,81 @@ export function renderTabs(): void {
 
   tabsContainer.classList.remove('hidden');
 
-  tabsContainer.innerHTML = documents.map((doc, index) => `
-    <div class="document-tab flex items-center gap-1 px-3 py-1.5 text-sm rounded-t cursor-pointer transition-colors
-      ${index === activeDocIndex ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700/50 hover:text-white'}"
-      data-doc-id="${doc.id}">
-      <span class="truncate max-w-[150px]" title="${doc.fileName}">${doc.fileName}</span>
-      ${doc.isDirty ? '<span class="text-indigo-400 ml-1">•</span>' : ''}
-      <button class="tab-close-btn p-0.5 rounded hover:bg-gray-600 ml-1" data-doc-id="${doc.id}" title="Close">
-        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-  `).join('');
+  const fragment = document.createDocumentFragment();
 
-  // Event listeners
-  tabsContainer.querySelectorAll('.document-tab').forEach((tab) => {
-    const docId = (tab as HTMLElement).dataset.docId;
-    if (!docId) return;
+  const createCloseIcon = () => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'w-3 h-3');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('viewBox', '0 0 24 24');
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('d', 'M6 18L18 6M6 6l12 12');
+    svg.appendChild(path);
+
+    return svg;
+  };
+
+  const clearElement = (el: HTMLElement) => {
+    while (el.firstChild) {
+      el.removeChild(el.firstChild);
+    }
+  };
+
+  clearElement(tabsContainer);
+
+  documents.forEach((doc, index) => {
+    const tab = document.createElement('div');
+    tab.className = `document-tab flex items-center gap-1 px-3 py-1.5 text-sm rounded-t cursor-pointer transition-colors ${
+      index === activeDocIndex
+        ? 'bg-gray-700 text-white'
+        : 'bg-gray-800 text-gray-400 hover:bg-gray-700/50 hover:text-white'
+    }`;
+    tab.dataset.docId = doc.id;
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'truncate max-w-[150px]';
+    titleSpan.title = doc.fileName;
+    titleSpan.textContent = doc.fileName;
+    tab.appendChild(titleSpan);
+
+    if (doc.isDirty) {
+      const dirtyIndicator = document.createElement('span');
+      dirtyIndicator.className = 'text-indigo-400 ml-1';
+      dirtyIndicator.textContent = '•';
+      tab.appendChild(dirtyIndicator);
+    }
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'tab-close-btn p-0.5 rounded hover:bg-gray-600 ml-1';
+    closeBtn.dataset.docId = doc.id;
+    closeBtn.title = 'Close';
+    closeBtn.appendChild(createCloseIcon());
+
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const targetDoc = documents.find(d => d.id === doc.id);
+      if (targetDoc?.isDirty) {
+        showCloseConfirmation(doc.id);
+      } else {
+        forceCloseDocument(doc.id);
+      }
+    });
 
     tab.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).closest('.tab-close-btn')) return;
-      switchToDocument(docId);
+      switchToDocument(doc.id);
     });
+
+    tab.appendChild(closeBtn);
+    fragment.appendChild(tab);
   });
 
-  tabsContainer.querySelectorAll('.tab-close-btn').forEach((btn) => {
-    const docId = (btn as HTMLElement).dataset.docId;
-    if (!docId) return;
-
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const doc = documents.find(d => d.id === docId);
-      if (doc?.isDirty) {
-        showCloseConfirmation(docId);
-      } else {
-        forceCloseDocument(docId);
-      }
-    });
-  });
+  tabsContainer.appendChild(fragment);
 }
 
 function updateDirtyIndicators(): void {
