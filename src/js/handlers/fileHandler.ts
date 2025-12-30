@@ -259,6 +259,15 @@ async function handleSinglePdfUpload(toolId, file) {
           }
         };
 
+        const appendEmptyMessage = (ul: HTMLUListElement, message: string, classes = 'text-gray-500 italic') => {
+          const li = document.createElement('li');
+          const span = document.createElement('span');
+          span.className = classes;
+          span.textContent = message;
+          li.appendChild(span);
+          ul.appendChild(li);
+        };
+
         const infoSection = createSection('Info Dictionary');
         if (info && Object.keys(info).length > 0) {
           for (const key in info) {
@@ -287,7 +296,7 @@ async function handleSinglePdfUpload(toolId, file) {
             infoSection.ul.appendChild(createListItem(key, displayValue));
           }
         } else {
-          infoSection.ul.innerHTML = `<li><span class="text-gray-500 italic">- No Info Dictionary data found -</span></li>`;
+          appendEmptyMessage(infoSection.ul, '- No Info Dictionary data found -');
         }
         resultsDiv.appendChild(infoSection.wrapper);
 
@@ -301,7 +310,7 @@ async function handleSinglePdfUpload(toolId, file) {
             );
           }
         } else {
-          fieldsSection.ul.innerHTML = `<li><span class="text-gray-500 italic">- No interactive form fields found -</span></li>`;
+          appendEmptyMessage(fieldsSection.ul, '- No interactive form fields found -');
         }
         resultsDiv.appendChild(fieldsSection.wrapper);
 
@@ -388,11 +397,18 @@ async function handleSinglePdfUpload(toolId, file) {
         const xmpSection = createSection('XMP Metadata');
         if (rawXmpString) {
           try {
+            if (/<!doctype/i.test(rawXmpString)) {
+              throw new Error('DOCTYPE is not allowed in XMP metadata');
+            }
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(
               rawXmpString,
               'application/xml'
             );
+            const parserError = xmlDoc.querySelector('parsererror');
+            if (parserError) {
+              throw new Error(parserError.textContent || 'Failed to parse XMP XML');
+            }
 
             const descriptions = xmlDoc.getElementsByTagName('rdf:Description');
             if (descriptions.length > 0) {
@@ -404,11 +420,15 @@ async function handleSinglePdfUpload(toolId, file) {
             }
 
             if (xmpSection.ul.children.length === 0) {
-              xmpSection.ul.innerHTML = `<li><span class="text-gray-500 italic">- No parseable XMP properties found -</span></li>`;
+              appendEmptyMessage(xmpSection.ul, '- No parseable XMP properties found -');
             }
           } catch (xmlError) {
-            console.error('Failed to parse XMP XML:', xmlError);
-            xmpSection.ul.innerHTML = `<li><span class="text-red-500 italic">- Error parsing XMP XML. Displaying raw. -</span></li>`;
+            console.error('Failed to parse XMP XML:', (xmlError as Error)?.message || xmlError);
+            appendEmptyMessage(
+              xmpSection.ul,
+              '- Error parsing XMP XML. Displaying raw. -',
+              'text-red-500 italic'
+            );
             const pre = document.createElement('pre');
             pre.className =
               'text-xs text-gray-300 whitespace-pre-wrap break-all';
@@ -416,13 +436,14 @@ async function handleSinglePdfUpload(toolId, file) {
             xmpSection.ul.appendChild(pre);
           }
         } else {
-          xmpSection.ul.innerHTML = `<li><span class="text-gray-500 italic">- No XMP metadata found -</span></li>`;
+          appendEmptyMessage(xmpSection.ul, '- No XMP metadata found -');
         }
         resultsDiv.appendChild(xmpSection.wrapper);
 
         resultsDiv.classList.remove('hidden');
       } catch (e) {
-        console.error('Failed to view metadata or fields:', e);
+        const safeError = e instanceof Error ? { message: e.message, name: e.name } : { message: String(e) };
+        console.error('Failed to view metadata or fields:', safeError);
         showAlert(
           'Error',
           'Could not fully analyze the PDF. It may be corrupted or have an unusual structure.'
@@ -481,7 +502,9 @@ async function handleSinglePdfUpload(toolId, file) {
         removeBtn.type = 'button';
         removeBtn.className =
           'btn p-2 text-red-500 hover:bg-gray-700 rounded-full self-center sm:self-auto';
-        removeBtn.innerHTML = '<i data-lucide="trash-2"></i>';
+        const icon = document.createElement('i');
+        icon.setAttribute('data-lucide', 'trash-2');
+        removeBtn.appendChild(icon);
         removeBtn.addEventListener('click', () => fieldWrapper.remove());
 
         fieldWrapper.append(keyInput, valueInput, removeBtn);
@@ -549,7 +572,8 @@ async function handleSinglePdfUpload(toolId, file) {
       'Error',
       'Could not load PDF. The file may be invalid, corrupted, or password-protected.'
     );
-    console.error(e);
+    const safeError = e instanceof Error ? { message: e.message, name: e.name } : { message: String(e) };
+    console.error('PDF load failed:', safeError);
   }
 }
 

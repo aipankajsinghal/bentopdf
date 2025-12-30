@@ -14,6 +14,15 @@ The application handles sensitive PDF data and requires immediate remediation of
 
 ---
 
+### Status Update (2025-02-28)
+- ✅ Priority 1 (DOM-based XSS in document tabs) mitigated by rendering tabs with DOM APIs instead of `innerHTML` (`src/js/documentManager.ts`).
+- ✅ Critical innerHTML misuse in metadata rendering addressed by replacing placeholders with DOM nodes and safer XMP parsing/validation (`src/js/handlers/fileHandler.ts`).
+- ✅ File intake validation hardened to require PDF MIME type and extension (`src/js/main.ts`).
+- ✅ OCR worker lifecycle tightened with timeouts, logged cleanup errors, and guaranteed termination (`src/js/toolOperations.ts`).
+- ✅ CSP enabled for Tauri builds to restore baseline injection protections (`src-tauri/tauri.conf.json`).
+
+---
+
 ## 📊 AUDIT FINDINGS BY CATEGORY
 
 ### 1. SECURITY AUDIT

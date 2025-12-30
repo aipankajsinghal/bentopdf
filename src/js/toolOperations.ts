@@ -250,8 +250,38 @@ export async function ocr(): Promise<void> {
   let fullText = '';
   let cancelled = false;
 
-  const cancelListener = () => { cancelled = true; if (worker) { try { worker.postMessage({ id: 'cancel', action: 'terminate' }); } catch (e) {} } };
+  const logWorkerWarning = (message: string, error: unknown) => {
+    const safeError = error instanceof Error ? { message: error.message, name: error.name } : { message: String(error) };
+    console.warn(message, safeError);
+  };
+
+  const cancelListener = () => {
+    cancelled = true;
+    if (worker) {
+      try {
+        worker.postMessage({ id: 'cancel', action: 'terminate' });
+      } catch (e) {
+        logWorkerWarning('Failed to send terminate signal to OCR worker', e);
+      }
+    }
+  };
   window.addEventListener('bentopdf-ocr-cancel', cancelListener);
+
+  let workerTerminateTimeout: number | undefined;
+  const scheduleWorkerTermination = () => {
+    if (workerTerminateTimeout) {
+      clearTimeout(workerTerminateTimeout);
+    }
+    if (worker) {
+      workerTerminateTimeout = window.setTimeout(() => {
+        try {
+          worker?.terminate();
+        } catch (e) {
+          logWorkerWarning('Failed to terminate OCR worker after timeout', e);
+        }
+      }, 30000);
+    }
+  };
 
   try {
     for (const pageNum of targets) {
@@ -286,7 +316,7 @@ export async function ocr(): Promise<void> {
             };
             worker.addEventListener('message', onMessage);
             worker.postMessage({ id, action: 'recognize', payload: { dataUrl, lang } });
-            // small timeout could be added per-page if desired
+            scheduleWorkerTermination();
           });
 
           const r: any = result;
@@ -314,9 +344,22 @@ export async function ocr(): Promise<void> {
   } finally {
     window.removeEventListener('bentopdf-ocr-cancel', cancelListener);
     modal.updateProgress(100);
-    if (worker && !cancelled) {
-      try { worker.postMessage({ id: 'done', action: 'terminate' }); } catch (e) {}
-      try { worker.terminate(); } catch (e) {}
+    if (workerTerminateTimeout) {
+      clearTimeout(workerTerminateTimeout);
+    }
+    if (worker) {
+      if (!cancelled) {
+        try {
+          worker.postMessage({ id: 'done', action: 'terminate' });
+        } catch (e) {
+          logWorkerWarning('Failed to post terminate message to OCR worker', e);
+        }
+      }
+      try {
+        worker.terminate();
+      } catch (e) {
+        logWorkerWarning('Failed to terminate OCR worker', e);
+      }
     }
   }
 
