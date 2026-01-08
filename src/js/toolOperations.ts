@@ -3,6 +3,7 @@ import { showWatermarkModal, showStampModal, showSignModal } from './ui/editorMo
 import { showPlacementOverlay } from './ui/placementOverlay.js';
 import Tesseract from 'tesseract.js';
 import { showTextModal } from './ui/textModal.js';
+import { showInputModal } from './ui/inputModal.js';
 import { showOcrModal } from './ui/editorModals.js';
 import {
   getActiveDocument,
@@ -194,11 +195,15 @@ export async function sign(): Promise<void> {
   clearPageSelection();
 }
 
-export async function annotate(): Promise<void> {
+export async function addText(): Promise<void> {
   const doc = getActiveDocument();
   if (!doc) return;
-  const text = prompt('Annotation text:');
+  
+  const text = await showInputModal('Add Text');
   if (!text) return;
+
+  const placement = await showPlacementOverlay({ type: 'text', text, fontSize: 12, opacity: 1 });
+  if (!placement) return;
 
   const pdfDoc = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -208,12 +213,57 @@ export async function annotate(): Promise<void> {
   for (const i of targets) {
     if (i < 0 || i >= pdfDoc.getPageCount()) continue;
     const page = pdfDoc.getPage(i);
+    const { width, height } = page.getSize();
+    
+    const xPage = placement.xNorm * width;
+    const yPage = height - (placement.yNorm * height) - (placement.hNorm * height);
+    const rot = typeof placement.rotateDeg === 'number' ? placement.rotateDeg : 0;
+    
     page.drawText(text, {
-      x: 40,
-      y: 40,
-      size: 12,
+      x: xPage,
+      y: yPage,
+      size: 12, // TODO: Make size configurable in modal or overlay
       font,
       color: rgb(0, 0, 0),
+      rotate: degrees(rot),
+    });
+  }
+
+  await savePdfDocToActive(doc, pdfDoc);
+  clearPageSelection();
+}
+
+export async function redact(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  // Let user place a rectangle over the rendered canvas to choose the area to redact
+  const placement = await showPlacementOverlay({ type: 'text', text: 'REDACT', fontSize: 36, opacity: 1 });
+  if (!placement) return;
+
+  const pdfDoc = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+  const selected = getSelectedPages();
+  const targets = selected.length ? selected : [Math.max(0, doc.currentPage - 1)];
+
+  for (const i of targets) {
+    if (i < 0 || i >= pdfDoc.getPageCount()) continue;
+    const page = pdfDoc.getPage(i);
+    const pageWidth = page.getWidth();
+    const pageHeight = page.getHeight();
+
+    const xPage = placement.xNorm * pageWidth;
+    const yPage = pageHeight - (placement.yNorm * pageHeight) - (placement.hNorm * pageHeight);
+    const w = placement.wNorm * pageWidth;
+    const h = placement.hNorm * pageHeight;
+
+    page.drawRectangle({
+      x: xPage,
+      y: yPage,
+      width: w,
+      height: h,
+      color: rgb(0, 0, 0),
+      borderWidth: 0,
+      opacity: 1,
     });
   }
 

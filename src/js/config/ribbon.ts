@@ -75,7 +75,8 @@ export const ribbonConfig: RibbonTab[] = [
       {
         name: 'Annotate',
         tools: [
-          { id: 'annotate', name: 'Annotate', icon: 'highlighter', tooltip: 'Open annotation tools' },
+          { id: 'add-text', name: 'Add Text', icon: 'type', tooltip: 'Add text overlay' },
+          { id: 'redact', name: 'Redact', icon: 'eye-off', tooltip: 'Redact selected area' },
           { id: 'sign', name: 'Sign', icon: 'pen-tool', tooltip: 'Add signature' },
           { id: 'stamps', name: 'Stamps', icon: 'stamp', tooltip: 'Add stamps' },
         ],
@@ -265,6 +266,7 @@ export const ribbonConfig: RibbonTab[] = [
             children: [
               { id: 'sanitize', name: 'Sanitize PDF', icon: 'brush', tooltip: 'Remove hidden data' },
               { id: 'remove-metadata', name: 'Remove Metadata', icon: 'file-x', tooltip: 'Strip metadata' },
+              { id: 'redact', name: 'Redact', icon: 'eye-off', tooltip: 'Redact selected area' },
               { id: 'flatten', name: 'Flatten', icon: 'layers', tooltip: 'Flatten annotations' },
             ],
           },

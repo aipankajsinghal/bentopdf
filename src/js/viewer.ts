@@ -38,19 +38,38 @@ export async function refreshViewer(): Promise<void> {
   updatePageIndicator(doc);
 }
 
+export async function resetViewerZoom(): Promise<void> {
+  const doc = getActiveDocument();
+  if (doc) {
+    // Default to fitting the page
+    await fitToPage();
+  } else {
+    currentZoom = 1.0;
+  }
+}
+
 async function renderCurrentPage(doc: Document): Promise<void> {
   const canvas = document.getElementById('viewer-canvas') as HTMLCanvasElement;
   if (!canvas || !doc.pdfJsDoc) return;
 
   try {
     const page = await doc.pdfJsDoc.getPage(doc.currentPage);
-    const viewport = page.getViewport({ scale: currentZoom * 1.5 }); // 1.5 base scale for clarity
+    // Use standard 1.0 scale as base; 1.5 was causing overflow
+    const viewport = page.getViewport({ scale: currentZoom });
 
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+    // Support high-DPI displays: render at devicePixelRatio and set CSS size
+    const outputScale = window.devicePixelRatio || 1;
+    const renderWidth = Math.floor(viewport.width * outputScale);
+    const renderHeight = Math.floor(viewport.height * outputScale);
+
+    canvas.width = renderWidth;
+    canvas.height = renderHeight;
+    canvas.style.width = `${Math.floor(viewport.width)}px`;
+    canvas.style.height = `${Math.floor(viewport.height)}px`;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0);
 
     // Cancel any previous render task to avoid "same canvas" errors
     try {
@@ -64,7 +83,6 @@ async function renderCurrentPage(doc: Document): Promise<void> {
     const renderTask = page.render({
       canvasContext: ctx,
       viewport,
-      canvas,
     } as any);
 
     currentRenderTask = renderTask;
@@ -270,7 +288,9 @@ export async function fitToPage(): Promise<void> {
     const scaleX = containerWidth / viewport.width;
     const scaleY = containerHeight / viewport.height;
 
-    currentZoom = Math.min(scaleX, scaleY) / 1.5; // Divide by base scale
+    // Use the smaller scale to ensure it fits entirely
+    currentZoom = Math.min(scaleX, scaleY);
+    // Clamp to reasonable limits
     currentZoom = Math.max(MIN_ZOOM, Math.min(currentZoom, MAX_ZOOM));
 
     await refreshCurrentPage();

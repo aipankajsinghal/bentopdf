@@ -221,7 +221,7 @@ function registerToolHandlers(): void {
   registerToolHandler('combine-single', () => callToolOp('combine-single', 'Combine to Single'));
 
   // Edit tools
-  registerToolHandler('annotate', () => callToolOp('annotate', 'Annotate'));
+  registerToolHandler('add-text', () => callToolOp('addText', 'Add Text'));
   registerToolHandler('sign', () => callToolOp('sign', 'Sign PDF'));
   registerToolHandler('stamps', () => callToolOp('stamps', 'Add Stamps'));
   registerToolHandler('watermark', () => callToolOp('watermark', 'Watermark'));
@@ -270,6 +270,7 @@ function registerToolHandlers(): void {
   registerToolHandler('remove-restrictions', () => callToolOp('remove-restrictions', 'Remove Restrictions'));
   registerToolHandler('sanitize', () => callToolOp('sanitize', 'Sanitize'));
   registerToolHandler('remove-metadata', () => callToolOp('remove-metadata', 'Remove Metadata'));
+  registerToolHandler('redact', () => callToolOp('redact', 'Redact'));
   registerToolHandler('flatten', () => callToolOp('flatten', 'Flatten'));
 
   // Tools
@@ -433,7 +434,13 @@ const init = async () => {
 
   // Wire up callbacks to avoid circular dependencies
   setDocumentStateCallbacks(hasAnyDocument, getActiveDocument);
-  setDocumentManagerCallbacks(updateToolStates, refreshViewer, clearViewer);
+  setDocumentManagerCallbacks(updateToolStates, refreshViewer, clearViewer, async () => {
+    // Reset zoom involves async operations (fitToPage), so we wrap it
+    // But since callback is void, we just call it.
+    // Actually viewer.ts exports resetViewerZoom, so we use that.
+    const { resetViewerZoom } = await import('./viewer.js');
+    resetViewerZoom();
+  });
 
   // Register tool handlers before ribbon init
   registerToolHandlers();

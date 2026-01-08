@@ -6,15 +6,18 @@ import * as pdfjsLib from 'pdfjs-dist';
 let updateToolStatesFn: () => void = () => {};
 let refreshViewerFn: () => void = () => {};
 let clearViewerFn: () => void = () => {};
+let resetViewerZoomFn: () => void = () => {};
 
 export function setDocumentManagerCallbacks(
   updateToolStates: () => void,
   refreshViewer: () => void,
-  clearViewer: () => void
+  clearViewer: () => void,
+  resetViewerZoom: () => void
 ): void {
   updateToolStatesFn = updateToolStates;
   refreshViewerFn = refreshViewer;
   clearViewerFn = clearViewer;
+  resetViewerZoomFn = resetViewerZoom;
 }
 
 // ============================================================================
@@ -96,7 +99,10 @@ export async function createDocumentFromBytes(bytes: Uint8Array, fileName: strin
 
   renderTabs();
   updateToolStatesFn();
-  refreshViewerFn();
+  renderTabs();
+  updateToolStatesFn();
+  // Instead of just refreshing, we reset zoom to fit the new document
+  resetViewerZoomFn();
 
   return doc;
 }

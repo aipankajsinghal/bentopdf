@@ -1,5 +1,10 @@
 // Ribbon UI renderer - Office-style compact toolbar
-import { ribbonConfig, RibbonTab, RibbonGroup, RibbonTool } from './config/ribbon.js';
+import {
+  ribbonConfig,
+  RibbonTab,
+  RibbonGroup,
+  RibbonTool,
+} from './config/ribbon.js';
 import { createIcons, icons } from 'lucide';
 
 // State callbacks - set by documentManager to avoid circular dependency
@@ -22,7 +27,10 @@ let openDropdown: HTMLElement | null = null;
 type ToolHandler = () => void | Promise<void>;
 const toolHandlers: Map<string, ToolHandler> = new Map();
 
-export function registerToolHandler(toolId: string, handler: ToolHandler): void {
+export function registerToolHandler(
+  toolId: string,
+  handler: ToolHandler
+): void {
   toolHandlers.set(toolId, handler);
 }
 
@@ -54,13 +62,17 @@ function renderRibbon(container: HTMLElement): void {
         <span class="text-white font-semibold text-sm hidden sm:inline">BentoPDF</span>
       </div>
       <div class="flex-1 flex items-center gap-1" id="ribbon-tab-buttons">
-        ${ribbonConfig.map(tab => `
+        ${ribbonConfig
+          .map(
+            (tab) => `
           <button class="ribbon-tab px-3 py-1.5 text-xs font-medium rounded-t transition-colors
             ${tab.id === activeTabId ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}"
             data-tab="${tab.id}">
             ${tab.name}
           </button>
-        `).join('')}
+        `
+          )
+          .join('')}
       </div>
       <div class="flex items-center gap-2">
         <button id="ribbon-expand-toggle" class="p-1 text-gray-400 hover:text-white transition-colors" title="Toggle ribbon size">
@@ -80,12 +92,12 @@ function renderRibbon(container: HTMLElement): void {
 
 // Render active tab's panel content
 function renderActiveTabPanel(): string {
-  const tab = ribbonConfig.find(t => t.id === activeTabId);
+  const tab = ribbonConfig.find((t) => t.id === activeTabId);
   if (!tab) return '';
 
   return `
     <div class="flex items-start gap-1 overflow-x-auto">
-      ${tab.groups.map(group => renderGroup(group)).join('')}
+      ${tab.groups.map((group) => renderGroup(group)).join('')}
     </div>
   `;
 }
@@ -93,9 +105,9 @@ function renderActiveTabPanel(): string {
 // Render a group of tools
 function renderGroup(group: RibbonGroup): string {
   return `
-    <div class="ribbon-group flex flex-col items-center px-2 border-r border-gray-700 last:border-r-0">
+    <div class="ribbon-group flex flex-col items-center px-2 border-r border-gray-700 last:border-r-0 flex-shrink-0">
       <div class="flex items-center gap-0.5">
-        ${group.tools.map(tool => renderTool(tool)).join('')}
+        ${group.tools.map((tool) => renderTool(tool)).join('')}
       </div>
       ${expandedMode ? `<span class="ribbon-group-label text-[9px] text-gray-500 uppercase mt-1">${group.name}</span>` : ''}
     </div>
@@ -106,7 +118,12 @@ function renderGroup(group: RibbonGroup): string {
 function renderTool(tool: RibbonTool): string {
   const isDropdown = tool.type === 'dropdown' || tool.type === 'split';
   const hasDoc = hasAnyDocumentFn();
-  const disabled = !hasDoc && !['open-file', 'image-to-pdf-group', 'text-to-pdf', 'json-to-pdf'].includes(tool.id) && !tool.id.includes('-to-pdf');
+  const disabled =
+    !hasDoc &&
+    !['open-file', 'image-to-pdf-group', 'text-to-pdf', 'json-to-pdf'].includes(
+      tool.id
+    ) &&
+    !tool.id.includes('-to-pdf');
 
   if (isDropdown) {
     return `
@@ -119,13 +136,17 @@ function renderTool(tool: RibbonTool): string {
           <i data-lucide="chevron-down" class="w-3 h-3 ml-0.5"></i>
         </button>
         <div class="ribbon-dropdown-menu hidden absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 min-w-[160px] py-1">
-          ${tool.children?.map(child => `
+          ${tool.children
+            ?.map(
+              (child) => `
             <button class="ribbon-dropdown-item w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left"
               data-tool="${child.id}" title="${child.tooltip || child.name}">
               <i data-lucide="${child.icon}" class="w-4 h-4"></i>
               <span>${child.name}</span>
             </button>
-          `).join('')}
+          `
+            )
+            .join('')}
         </div>
       </div>
     `;
@@ -162,13 +183,35 @@ function setupRibbonEvents(): void {
     }
 
     // Dropdown toggle
-    const dropdownBtn = target.closest('.ribbon-dropdown > .ribbon-btn') as HTMLElement;
+    const dropdownBtn = target.closest(
+      '.ribbon-dropdown > .ribbon-btn'
+    ) as HTMLElement;
     if (dropdownBtn) {
       const dropdown = dropdownBtn.parentElement;
-      const menu = dropdown?.querySelector('.ribbon-dropdown-menu') as HTMLElement;
+      const menu = dropdown?.querySelector(
+        '.ribbon-dropdown-menu'
+      ) as HTMLElement;
       if (menu) {
         closeOpenDropdown();
+
+        // Reset position classes first
+        menu.classList.remove('hidden', 'right-0', 'left-0');
+        menu.classList.add('left-0'); // Default to left-aligned
+
+        // Temporarily show to calculate bounds
+        menu.style.visibility = 'hidden';
         menu.classList.remove('hidden');
+
+        const rect = menu.getBoundingClientRect();
+        const windowWidth = window.innerWidth;
+
+        // If overflowing right edge, align to right
+        if (rect.right > windowWidth) {
+          menu.classList.remove('left-0');
+          menu.classList.add('right-0');
+        }
+
+        menu.style.visibility = '';
         openDropdown = menu;
         e.stopPropagation();
       }
@@ -237,8 +280,14 @@ export function updateToolStates(): void {
     if (!toolId) return;
 
     // Tools that should always be enabled
-    const alwaysEnabled = ['open-file', 'image-to-pdf-group', 'text-to-pdf', 'json-to-pdf'];
-    const isConvertToPdf = toolId.includes('-to-pdf') && !toolId.includes('pdf-to-');
+    const alwaysEnabled = [
+      'open-file',
+      'image-to-pdf-group',
+      'text-to-pdf',
+      'json-to-pdf',
+    ];
+    const isConvertToPdf =
+      toolId.includes('-to-pdf') && !toolId.includes('pdf-to-');
 
     if (alwaysEnabled.includes(toolId) || isConvertToPdf) {
       btn.classList.remove('opacity-40', 'pointer-events-none');
@@ -265,7 +314,7 @@ export function updateToolStates(): void {
 
 // Switch to a specific tab programmatically
 export function switchToTab(tabId: string): void {
-  if (ribbonConfig.find(t => t.id === tabId)) {
+  if (ribbonConfig.find((t) => t.id === tabId)) {
     activeTabId = tabId;
     const container = document.getElementById('ribbon');
     if (container) {
