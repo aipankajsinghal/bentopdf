@@ -376,7 +376,10 @@ function registerToolHandlers(): void {
     'edit-attachments': 'Edit Attachments',
     'metadata': 'Metadata',
     'dimensions': 'Page Dimensions',
-    'compare': 'Compare PDFs'
+    'compare': 'Compare PDFs',
+    'copy-pages': 'Copy Pages',
+    'cut-pages': 'Cut Pages',
+    'paste-pages': 'Paste Pages'
   };
 
   Object.entries(standardOperations).forEach(([id, name]) => {
@@ -519,6 +522,33 @@ function setupKeyboardShortcuts(): void {
       await redo();
       return;
     }
+
+    // Ctrl/Cmd + C - Copy pages
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'c') {
+      if (getActiveDocument()) {
+        e.preventDefault();
+        await toolOps.copyPages?.();
+      }
+      return;
+    }
+
+    // Ctrl/Cmd + X - Cut pages
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'x') {
+      if (getActiveDocument()) {
+        e.preventDefault();
+        await toolOps.cutPages?.();
+      }
+      return;
+    }
+
+    // Ctrl/Cmd + V - Paste pages
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'v') {
+      if (getActiveDocument()) {
+        e.preventDefault();
+        await toolOps.pastePages?.();
+      }
+      return;
+    }
   });
 }
 
@@ -580,6 +610,9 @@ const init = async () => {
       },
       onUndo: () => undo(),
       onRedo: () => redo(),
+      onCopyPages: () => toolOps.copyPages?.(),
+      onCutPages: () => toolOps.cutPages?.(),
+      onPastePages: () => toolOps.pastePages?.(),
       onSelectAll: () => {
         const doc = getActiveDocument();
         if (doc && typeof selectAllPages === 'function') {
@@ -615,6 +648,9 @@ Ctrl+S - Save
 Ctrl+Shift+S - Save As
 Ctrl+Z - Undo
 Ctrl+Shift+Z - Redo
+Ctrl+C - Copy Pages
+Ctrl+X - Cut Pages
+Ctrl+V - Paste Pages
 Ctrl+A - Select All Pages
 Escape - Deselect All
 Ctrl+Plus - Zoom In

@@ -38,6 +38,18 @@ export const ribbonConfig: RibbonTab[] = [
         tools: [
           { id: 'undo', name: 'Undo', icon: 'undo-2', tooltip: 'Undo last action' },
           { id: 'redo', name: 'Redo', icon: 'redo-2', tooltip: 'Redo last action' },
+          {
+            id: 'clipboard-group',
+            name: 'Clipboard',
+            icon: 'clipboard',
+            type: 'dropdown',
+            tooltip: 'Copy, cut, paste pages',
+            children: [
+              { id: 'copy-pages', name: 'Copy Pages', icon: 'copy', tooltip: 'Copy selected pages (Ctrl+C)' },
+              { id: 'cut-pages', name: 'Cut Pages', icon: 'scissors', tooltip: 'Cut selected pages (Ctrl+X)' },
+              { id: 'paste-pages', name: 'Paste Pages', icon: 'clipboard-paste', tooltip: 'Paste pages (Ctrl+V)' },
+            ],
+          },
         ],
       },
       {

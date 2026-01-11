@@ -293,6 +293,9 @@ export async function initTauriIntegrations(handlers: {
   onCloseDoc?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  onCopyPages?: () => void;
+  onCutPages?: () => void;
+  onPastePages?: () => void;
   onSelectAll?: () => void;
   onDeselect?: () => void;
   onZoomIn?: () => void;
@@ -335,6 +338,15 @@ export async function initTauriIntegrations(handlers: {
         break;
       case 'redo':
         handlers.onRedo?.();
+        break;
+      case 'copy-pages':
+        handlers.onCopyPages?.();
+        break;
+      case 'cut-pages':
+        handlers.onCutPages?.();
+        break;
+      case 'paste-pages':
+        handlers.onPastePages?.();
         break;
       case 'select-all':
         handlers.onSelectAll?.();

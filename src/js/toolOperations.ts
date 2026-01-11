@@ -12,7 +12,7 @@ import {
   openDocument,
   Document,
 } from './documentManager.js';
-import { getSelectedPages, clearPageSelection } from './state.js';
+import { getSelectedPages, clearPageSelection, setClipboard, getClipboard, clearClipboard, ClipboardData } from './state.js';
 import { PDFImage } from 'pdf-lib';
 
 // Helper: save PDFDocument to active document
@@ -1118,6 +1118,128 @@ function showAlert(title: string, message: string) {
   window.dispatchEvent(event);
 }
 
+// ============================================================================
+// Clipboard Operations (Copy/Cut/Paste Pages)
+// ============================================================================
+
+export async function copyPages(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  const selected = getSelectedPages();
+  if (selected.length === 0) {
+    showAlert('No Selection', 'Please select pages to copy.');
+    return;
+  }
+
+  // Create a new PDF with just the selected pages
+  const srcPdf = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+  const clipboardPdf = await PDFDocument.create();
+
+  const copiedPages = await clipboardPdf.copyPages(srcPdf, selected);
+  copiedPages.forEach(page => clipboardPdf.addPage(page));
+
+  const clipboardBytes = await clipboardPdf.save();
+
+  setClipboard({
+    docId: doc.id,
+    pageIndices: [...selected],
+    pdfBytes: new Uint8Array(clipboardBytes),
+    operation: 'copy',
+  });
+
+  showAlert('Copied', `${selected.length} page(s) copied to clipboard.`);
+}
+
+export async function cutPages(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  const selected = getSelectedPages();
+  if (selected.length === 0) {
+    showAlert('No Selection', 'Please select pages to cut.');
+    return;
+  }
+
+  // Create a new PDF with just the selected pages for clipboard
+  const srcPdf = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+  const clipboardPdf = await PDFDocument.create();
+
+  const copiedPages = await clipboardPdf.copyPages(srcPdf, selected);
+  copiedPages.forEach(page => clipboardPdf.addPage(page));
+
+  const clipboardBytes = await clipboardPdf.save();
+
+  setClipboard({
+    docId: doc.id,
+    pageIndices: [...selected],
+    pdfBytes: new Uint8Array(clipboardBytes),
+    operation: 'cut',
+  });
+
+  // Remove the selected pages from the source document
+  const pageCount = srcPdf.getPageCount();
+  // Remove in reverse order to maintain correct indices
+  const sortedIndices = [...selected].sort((a, b) => b - a);
+  for (const idx of sortedIndices) {
+    if (idx >= 0 && idx < pageCount) {
+      srcPdf.removePage(idx);
+    }
+  }
+
+  // Don't allow removing all pages - leave at least one
+  if (srcPdf.getPageCount() === 0) {
+    showAlert('Error', 'Cannot remove all pages. At least one page must remain.');
+    clearClipboard();
+    return;
+  }
+
+  await savePdfDocToActive(doc, srcPdf);
+  clearPageSelection();
+
+  showAlert('Cut', `${selected.length} page(s) cut to clipboard.`);
+}
+
+export async function pastePages(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  const clipboard = getClipboard();
+  if (!clipboard) {
+    showAlert('Clipboard Empty', 'No pages in clipboard. Copy or cut pages first.');
+    return;
+  }
+
+  const destPdf = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+  const srcPdf = await PDFDocument.load(clipboard.pdfBytes, { ignoreEncryption: true });
+
+  // Determine insert position - after current page or at the end if no page selected
+  const selected = getSelectedPages();
+  let insertIndex = destPdf.getPageCount(); // Default to end
+
+  if (selected.length > 0) {
+    // Insert after the last selected page
+    insertIndex = Math.max(...selected) + 1;
+  } else if (doc.currentPage > 0) {
+    // Insert after current page
+    insertIndex = doc.currentPage;
+  }
+
+  // Copy all pages from clipboard
+  const pageIndices = srcPdf.getPageIndices();
+  const copiedPages = await destPdf.copyPages(srcPdf, pageIndices);
+
+  // Insert pages at the determined position
+  for (let i = 0; i < copiedPages.length; i++) {
+    destPdf.insertPage(insertIndex + i, copiedPages[i]);
+  }
+
+  await savePdfDocToActive(doc, destPdf);
+  clearPageSelection();
+
+  showAlert('Pasted', `${copiedPages.length} page(s) pasted.`);
+}
+
 export default {
   compress,
   rotateLeft,
@@ -1151,4 +1273,7 @@ export default {
   textToPdf,
   jsonToPdf,
   pdfToJson,
+  copyPages,
+  cutPages,
+  pastePages,
 };

@@ -2,10 +2,18 @@
 // Note: Primary state is now managed in documentManager.ts
 // This file provides global app state and legacy compatibility
 
+export interface ClipboardData {
+  docId: string;
+  pageIndices: number[];
+  pdfBytes: Uint8Array;
+  operation: 'copy' | 'cut';
+}
+
 export interface AppState {
   activeRibbonTab: string;
   isProcessing: boolean;
   selectedPageIndices: number[];
+  clipboard: ClipboardData | null;
   // Legacy fields kept for compatibility with existing logic modules
   activeTool?: string | null;
   files?: File[];
@@ -18,6 +26,7 @@ export const state: AppState = {
   activeRibbonTab: 'home',
   isProcessing: false,
   selectedPageIndices: [],
+  clipboard: null,
   activeTool: null,
   files: [],
   pdfDoc: null,
@@ -77,10 +86,28 @@ export function isProcessing(): boolean {
   return state.isProcessing;
 }
 
+// Clipboard operations
+export function setClipboard(data: ClipboardData): void {
+  state.clipboard = data;
+}
+
+export function getClipboard(): ClipboardData | null {
+  return state.clipboard;
+}
+
+export function clearClipboard(): void {
+  state.clipboard = null;
+}
+
+export function hasClipboard(): boolean {
+  return state.clipboard !== null;
+}
+
 // Legacy reset for compatibility during transition
 export function resetState(): void {
   state.selectedPageIndices = [];
   state.isProcessing = false;
+  state.clipboard = null;
   state.activeTool = null;
   state.files = [];
   state.pdfDoc = null;

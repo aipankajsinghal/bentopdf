@@ -49,6 +49,9 @@ pub fn run() {
             // Edit menu
             let undo_item = MenuItem::with_id(app, "undo", "Undo", true, Some("CmdOrCtrl+Z"))?;
             let redo_item = MenuItem::with_id(app, "redo", "Redo", true, Some("CmdOrCtrl+Shift+Z"))?;
+            let copy_item = MenuItem::with_id(app, "copy-pages", "Copy Pages", true, Some("CmdOrCtrl+C"))?;
+            let cut_item = MenuItem::with_id(app, "cut-pages", "Cut Pages", true, Some("CmdOrCtrl+X"))?;
+            let paste_item = MenuItem::with_id(app, "paste-pages", "Paste Pages", true, Some("CmdOrCtrl+V"))?;
             let select_all_item = MenuItem::with_id(app, "select-all", "Select All Pages", true, Some("CmdOrCtrl+A"))?;
             let deselect_item = MenuItem::with_id(app, "deselect", "Deselect All", true, Some("Escape"))?;
 
@@ -59,6 +62,10 @@ pub fn run() {
                 &[
                     &undo_item,
                     &redo_item,
+                    &PredefinedMenuItem::separator(app)?,
+                    &copy_item,
+                    &cut_item,
+                    &paste_item,
                     &PredefinedMenuItem::separator(app)?,
                     &select_all_item,
                     &deselect_item,
