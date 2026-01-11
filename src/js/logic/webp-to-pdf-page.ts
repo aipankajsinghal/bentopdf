@@ -199,35 +199,28 @@ async function convertToPdf() {
 
         for (const file of files) {
             const originalBytes = await readFileAsArrayBuffer(file);
-            let jpgImage;
+            let image;
 
             try {
-                jpgImage = await pdfDoc.embedJpg(new Uint8Array(originalBytes));
-            } catch (e) {
-                showAlert(
-                    'Warning',
-                    `Direct JPG embedding failed for ${file.name}, attempting to sanitize...`
+                 // WebP is not supported natively by PDF, so we must convert to JPEG
+                const sanitizedBytes = await sanitizeImageAsJpeg(originalBytes);
+                image = await pdfDoc.embedJpg(sanitizedBytes as Uint8Array);
+            } catch (fallbackError) {
+                console.error(
+                    `Failed to process ${file.name}:`,
+                    fallbackError
                 );
-                try {
-                    const sanitizedBytes = await sanitizeImageAsJpeg(originalBytes);
-                    jpgImage = await pdfDoc.embedJpg(sanitizedBytes as Uint8Array);
-                } catch (fallbackError) {
-                    console.error(
-                        `Failed to process ${file.name} after sanitization:`,
-                        fallbackError
-                    );
-                    throw new Error(
-                        `Could not process "${file.name}". The file may be corrupted.`
-                    );
-                }
+                throw new Error(
+                    `Could not process "${file.name}". The file may be corrupted or format not supported.`
+                );
             }
 
-            const page = pdfDoc.addPage([jpgImage.width, jpgImage.height]);
-            page.drawImage(jpgImage, {
+            const page = pdfDoc.addPage([image.width, image.height]);
+            page.drawImage(image, {
                 x: 0,
                 y: 0,
-                width: jpgImage.width,
-                height: jpgImage.height,
+                width: image.width,
+                height: image.height,
             });
         }
 

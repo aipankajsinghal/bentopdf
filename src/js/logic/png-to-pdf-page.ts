@@ -199,18 +199,19 @@ async function convertToPdf() {
 
         for (const file of files) {
             const originalBytes = await readFileAsArrayBuffer(file);
-            let jpgImage;
+            let image;
 
             try {
-                jpgImage = await pdfDoc.embedJpg(new Uint8Array(originalBytes));
+                image = await pdfDoc.embedPng(new Uint8Array(originalBytes));
             } catch (e) {
                 showAlert(
                     'Warning',
-                    `Direct JPG embedding failed for ${file.name}, attempting to sanitize...`
+                    `Direct PNG embedding failed for ${file.name}, attempting to sanitize...`
                 );
                 try {
+                    // Fallback to JPEG if PNG fails (note: transparency may be lost)
                     const sanitizedBytes = await sanitizeImageAsJpeg(originalBytes);
-                    jpgImage = await pdfDoc.embedJpg(sanitizedBytes as Uint8Array);
+                    image = await pdfDoc.embedJpg(sanitizedBytes as Uint8Array);
                 } catch (fallbackError) {
                     console.error(
                         `Failed to process ${file.name} after sanitization:`,
@@ -222,12 +223,12 @@ async function convertToPdf() {
                 }
             }
 
-            const page = pdfDoc.addPage([jpgImage.width, jpgImage.height]);
-            page.drawImage(jpgImage, {
+            const page = pdfDoc.addPage([image.width, image.height]);
+            page.drawImage(image, {
                 x: 0,
                 y: 0,
-                width: jpgImage.width,
-                height: jpgImage.height,
+                width: image.width,
+                height: image.height,
             });
         }
 
