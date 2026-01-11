@@ -268,7 +268,7 @@ async function convertToPdf() {
                 } else if (file.type === 'image/png') {
                     // Handle PNG files
                     const originalBytes = await readFileAsArrayBuffer(file);
-                    const pngImage = await pdfDoc.embedPng(originalBytes as Uint8Array);
+                    const pngImage = await pdfDoc.embedPng(new Uint8Array(originalBytes));
 
                     const page = pdfDoc.addPage([pngImage.width, pngImage.height]);
                     page.drawImage(pngImage, {
@@ -283,7 +283,7 @@ async function convertToPdf() {
                     let jpgImage;
 
                     try {
-                        jpgImage = await pdfDoc.embedJpg(originalBytes as Uint8Array);
+                        jpgImage = await pdfDoc.embedJpg(new Uint8Array(originalBytes));
                     } catch (e) {
                         // Fallback: convert to JPEG via canvas
                         const sanitizedBytes = await sanitizeImageAsJpeg(originalBytes);

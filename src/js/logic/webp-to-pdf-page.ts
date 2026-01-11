@@ -202,7 +202,7 @@ async function convertToPdf() {
             let jpgImage;
 
             try {
-                jpgImage = await pdfDoc.embedJpg(originalBytes as Uint8Array);
+                jpgImage = await pdfDoc.embedJpg(new Uint8Array(originalBytes));
             } catch (e) {
                 showAlert(
                     'Warning',
