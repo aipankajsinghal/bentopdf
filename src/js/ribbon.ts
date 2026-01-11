@@ -96,7 +96,7 @@ function renderActiveTabPanel(): string {
   if (!tab) return '';
 
   return `
-    <div class="flex items-start gap-1 overflow-x-auto">
+    <div class="flex items-stretch gap-0 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
       ${tab.groups.map((group) => renderGroup(group)).join('')}
     </div>
   `;
@@ -105,11 +105,11 @@ function renderActiveTabPanel(): string {
 // Render a group of tools
 function renderGroup(group: RibbonGroup): string {
   return `
-    <div class="ribbon-group flex flex-col items-center px-2 border-r border-gray-700 last:border-r-0 flex-shrink-0">
-      <div class="flex items-center gap-0.5">
+    <div class="ribbon-group flex flex-col items-center px-3 border-r border-gray-700/50 last:border-r-0 flex-shrink-0">
+      <div class="flex items-center gap-1 ${expandedMode ? 'flex-wrap justify-center' : ''}">
         ${group.tools.map((tool) => renderTool(tool)).join('')}
       </div>
-      ${expandedMode ? `<span class="ribbon-group-label text-[9px] text-gray-500 uppercase mt-1">${group.name}</span>` : ''}
+      ${expandedMode ? `<span class="ribbon-group-label text-[10px] text-gray-500 uppercase tracking-wide mt-1.5 font-medium">${group.name}</span>` : ''}
     </div>
   `;
 }
@@ -127,22 +127,24 @@ function renderTool(tool: RibbonTool): string {
 
   if (isDropdown) {
     return `
-      <div class="ribbon-dropdown relative" data-tool-id="${tool.id}">
-        <button class="ribbon-btn flex items-center gap-0.5 px-2 py-1.5 rounded text-gray-300 hover:bg-gray-700 hover:text-white transition-colors
-          ${disabled ? 'opacity-40 pointer-events-none' : ''}"
+      <div class="ribbon-dropdown relative group" data-tool-id="${tool.id}">
+        <button class="ribbon-btn flex items-center gap-1 px-2 py-1.5 rounded text-gray-300 hover:bg-gray-600 hover:text-white transition-all duration-150
+          ${disabled ? 'opacity-40 pointer-events-none' : ''} ${expandedMode ? 'flex-col' : ''}"
           data-tool="${tool.id}" title="${tool.tooltip || tool.name}">
-          <i data-lucide="${tool.icon}" class="w-4 h-4"></i>
-          ${expandedMode ? `<span class="text-xs">${tool.name}</span>` : ''}
-          <i data-lucide="chevron-down" class="w-3 h-3 ml-0.5"></i>
+          <div class="flex items-center gap-1">
+            <i data-lucide="${tool.icon}" class="w-4 h-4"></i>
+            ${expandedMode ? '' : `<i data-lucide="chevron-down" class="w-3 h-3 opacity-60"></i>`}
+          </div>
+          ${expandedMode ? `<div class="flex items-center gap-0.5"><span class="text-[11px] leading-tight">${tool.name}</span><i data-lucide="chevron-down" class="w-2.5 h-2.5 opacity-60"></i></div>` : ''}
         </button>
-        <div class="ribbon-dropdown-menu hidden absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 min-w-[160px] py-1">
+        <div class="ribbon-dropdown-menu hidden absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl z-50 min-w-[180px] py-1.5 backdrop-blur-sm">
           ${tool.children
             ?.map(
               (child) => `
-            <button class="ribbon-dropdown-item w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left"
+            <button class="ribbon-dropdown-item w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-indigo-600 hover:text-white text-left transition-colors duration-100"
               data-tool="${child.id}" title="${child.tooltip || child.name}">
-              <i data-lucide="${child.icon}" class="w-4 h-4"></i>
-              <span>${child.name}</span>
+              <i data-lucide="${child.icon}" class="w-4 h-4 flex-shrink-0"></i>
+              <span class="flex-1">${child.name}</span>
             </button>
           `
             )
@@ -153,11 +155,11 @@ function renderTool(tool: RibbonTool): string {
   }
 
   return `
-    <button class="ribbon-btn flex items-center gap-1 px-2 py-1.5 rounded text-gray-300 hover:bg-gray-700 hover:text-white transition-colors
-      ${disabled ? 'opacity-40 pointer-events-none' : ''}"
+    <button class="ribbon-btn flex items-center gap-1 px-2 py-1.5 rounded text-gray-300 hover:bg-gray-600 hover:text-white transition-all duration-150
+      ${disabled ? 'opacity-40 pointer-events-none' : ''} ${expandedMode ? 'flex-col' : ''}"
       data-tool="${tool.id}" title="${tool.tooltip || tool.name}">
       <i data-lucide="${tool.icon}" class="w-4 h-4"></i>
-      ${expandedMode ? `<span class="text-xs">${tool.name}</span>` : ''}
+      ${expandedMode ? `<span class="text-[11px] leading-tight">${tool.name}</span>` : ''}
     </button>
   `;
 }
