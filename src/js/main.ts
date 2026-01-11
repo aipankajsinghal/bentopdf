@@ -26,6 +26,7 @@ import {
   nextPage,
   prevPage,
   toggleThumbnails,
+  resetViewerZoom,
 } from './viewer.js';
 import { setProcessing } from './state.js';
 
@@ -430,7 +431,7 @@ const init = async () => {
     // Reset zoom involves async operations (fitToPage), so we wrap it
     // But since callback is void, we just call it.
     // Actually viewer.ts exports resetViewerZoom, so we use that.
-    const { resetViewerZoom } = await import('./viewer.js');
+    // We use the statically imported resetViewerZoom
     resetViewerZoom();
   });
 
