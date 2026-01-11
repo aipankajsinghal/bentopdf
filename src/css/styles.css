@@ -689,3 +689,113 @@ input[type="number"]::-webkit-outer-spin-button {
     z-index: -1;
   }
 }
+
+/* ============================================================================
+   Ribbon Toolbar Styles
+   ============================================================================ */
+
+/* Ribbon dropdown menu animations */
+.ribbon-dropdown-menu {
+  transform-origin: top left;
+  animation: dropdownSlide 0.15s ease-out;
+}
+
+@keyframes dropdownSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Ribbon button active state */
+.ribbon-btn:active:not(.opacity-40) {
+  transform: scale(0.95);
+}
+
+/* Ribbon group separator */
+.ribbon-group {
+  position: relative;
+}
+
+.ribbon-group:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 10%;
+  height: 80%;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, #4b5563, transparent);
+}
+
+/* Ribbon panel scrollbar */
+.ribbon-panel::-webkit-scrollbar {
+  height: 4px;
+}
+
+.ribbon-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ribbon-panel::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 2px;
+}
+
+.ribbon-panel::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Dropdown item hover indicator */
+.ribbon-dropdown-item {
+  position: relative;
+}
+
+.ribbon-dropdown-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #6366f1;
+  transform: scaleY(0);
+  transition: transform 0.15s ease;
+}
+
+.ribbon-dropdown-item:hover::before {
+  transform: scaleY(1);
+}
+
+/* Ribbon expanded mode - vertically align tools */
+.ribbon-btn.flex-col {
+  min-width: 48px;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* Thin scrollbar utility */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 2px;
+}
+
+.scrollbar-thumb-gray-600::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background: transparent;
+}
