@@ -13,17 +13,19 @@
     "windows": [
       {
         "title": "BentoPDF",
+        "label": "main",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
         "minHeight": 600,
         "resizable": true,
         "fullscreen": false,
-        "center": true
+        "center": true,
+        "dragDropEnabled": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; frame-src 'none'; base-uri 'self'; form-action 'self';"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: asset: blob:; font-src 'self'; frame-src 'none'; base-uri 'self'; form-action 'self';"
     }
   },
   "bundle": {
@@ -43,6 +45,20 @@
       "nsis": {
         "installMode": "currentUser"
       }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["pdf"],
+        "name": "PDF Document",
+        "description": "Portable Document Format",
+        "mimeType": "application/pdf",
+        "role": "Editor"
+      }
+    ]
+  },
+  "plugins": {
+    "window-state": {
+      "all": true
     }
   }
 }

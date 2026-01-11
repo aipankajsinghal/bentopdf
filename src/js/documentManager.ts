@@ -165,6 +165,12 @@ export function forceCloseDocument(docId: string): void {
   }
 }
 
+export function closeActiveDocument(): void {
+  const doc = getActiveDocument();
+  if (!doc) return;
+  forceCloseDocument(doc.id);
+}
+
 export function switchToDocument(docId: string): void {
   const index = documents.findIndex(d => d.id === docId);
   if (index !== -1 && index !== activeDocIndex) {
