@@ -19,9 +19,7 @@ import {
   simpleTools,
   singlePdfLoadTools,
 } from '../config/pdf-tools.js';
-import * as pdfjsLib from 'pdfjs-dist';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 
 // Re-export rotation state utilities
 export { getRotationState, updateRotationState, resetRotationState, initializeRotationState } from '../utils/rotation-state.js';

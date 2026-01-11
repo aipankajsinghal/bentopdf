@@ -86,4 +86,10 @@ export function resetState(): void {
   state.pdfDoc = null;
   state.pdfPages = [];
   state.currentPdfUrl = null;
+
+  // Clear tool content if it exists
+  const toolContent = document.getElementById('tool-content');
+  if (toolContent) {
+    toolContent.innerHTML = '';
+  }
 }

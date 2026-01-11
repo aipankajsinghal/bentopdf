@@ -1,5 +1,5 @@
 // Viewer wrapper - PDF rendering and thumbnail strip
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from './utils/pdfjs-init.js';
 import { getActiveDocument, Document } from './documentManager.js';
 import { createIcons, icons } from 'lucide';
 
@@ -13,7 +13,7 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4.0;
 const ZOOM_STEP = 0.25;
 // Track current pdf.js render task so we can cancel overlapping renders
-let currentRenderTask: any = null;
+let currentRenderTask: pdfjsLib.RenderTask | null = null;
 
 // ============================================================================
 // Viewer Rendering
@@ -83,7 +83,8 @@ async function renderCurrentPage(doc: Document): Promise<void> {
     const renderTask = page.render({
       canvasContext: ctx,
       viewport,
-    } as any);
+      canvas,
+    });
 
     currentRenderTask = renderTask;
     try {
@@ -181,7 +182,7 @@ async function renderThumbnail(pdfDoc: pdfjsLib.PDFDocumentProxy, pageNum: numbe
         canvasContext: ctx,
         viewport,
         canvas,
-      } as any);
+      });
       try {
         await thumbRender.promise;
       } catch (err) {

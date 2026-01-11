@@ -2,14 +2,14 @@
 // TODO: @ALAM - remove ts-nocheck and fix types later, possibly convert this into an npm package
 
 import { PDFDocument, PDFName, PDFString, PDFNumber, PDFArray, PDFHexString } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import Sortable from 'sortablejs';
 import { createIcons, icons } from 'lucide';
 import '../../css/bookmark.css';
 import { initializeGlobalShortcuts } from '../utils/shortcuts-init.js';
 import { truncateFilename, getPDFDocument } from '../utils/helpers.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 
 const modalContainer = document.getElementById('modal-container');
@@ -2126,3 +2126,4 @@ downloadBtn.addEventListener('click', async () => {
     );
   }
 });
+

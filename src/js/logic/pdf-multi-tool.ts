@@ -1,6 +1,6 @@
 import { createIcons, icons } from 'lucide';
 import { degrees, PDFDocument as PDFLibDocument } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import JSZip from 'jszip';
 import Sortable from 'sortablejs';
 import { downloadFile, getPDFDocument } from '../utils/helpers';

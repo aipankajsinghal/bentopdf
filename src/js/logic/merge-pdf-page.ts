@@ -4,11 +4,11 @@ import { state } from '../state.js';
 import { renderPagesProgressively, cleanupLazyRendering } from '../utils/render-utils.js';
 
 import { createIcons, icons } from 'lucide';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import Sortable from 'sortablejs';
 
-// @ts-ignore
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
+
 
 interface MergeState {
     pdfDocs: Record<string, any>;
@@ -257,9 +257,9 @@ const resetState = async () => {
 export async function merge() {
     showLoader('Merging PDFs...');
     try {
-        // @ts-ignore
+        
         const jobs: MergeJob[] = [];
-        // @ts-ignore
+        
         const filesToMerge: MergeFile[] = [];
         const uniqueFileNames = new Set<string>();
 
@@ -357,7 +357,7 @@ export async function merge() {
             }
         }
 
-        // @ts-ignore
+        
         const message: MergeMessage = {
             command: 'merge',
             files: filesToMerge,
@@ -366,7 +366,7 @@ export async function merge() {
 
         mergeWorker.postMessage(message, filesToMerge.map(f => f.data));
 
-        // @ts-ignore
+        
         mergeWorker.onmessage = (e: MessageEvent<MergeResponse>) => {
             hideLoader();
             if (e.data.status === 'success') {
@@ -627,3 +627,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 });
+

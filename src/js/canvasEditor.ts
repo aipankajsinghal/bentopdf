@@ -3,9 +3,7 @@ import { getPDFDocument } from './utils/helpers.js';
 import { state } from './state.js';
 import { toolLogic } from './logic/index.js';
 import { icons, createIcons } from 'lucide';
-import * as pdfjsLib from 'pdfjs-dist';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+import { pdfjsLib } from './utils/pdfjs-init.js';
 
 
 const editorState: {

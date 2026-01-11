@@ -10,11 +10,13 @@ import {
   updateDocumentBytes,
   createDocumentFromBytes,
   openDocument,
+  Document,
 } from './documentManager.js';
 import { getSelectedPages, clearPageSelection } from './state.js';
+import { PDFImage } from 'pdf-lib';
 
 // Helper: save PDFDocument to active document
-async function savePdfDocToActive(doc: any, pdfDoc: PDFDocument) {
+async function savePdfDocToActive(doc: Document, pdfDoc: PDFDocument) {
   const bytes = await pdfDoc.save();
   await updateDocumentBytes(doc, new Uint8Array(bytes));
 }
@@ -159,7 +161,7 @@ export async function sign(): Promise<void> {
   const file = sel.file;
   const arr = new Uint8Array(await file.arrayBuffer());
   const pdfDoc = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
-  let img: any;
+  let img: PDFImage;
   if (/\.png$/i.test(file.name)) {
     img = await pdfDoc.embedPng(arr);
   } else {
@@ -344,7 +346,7 @@ export async function ocr(): Promise<void> {
         off.height = viewport.height;
         const ctx = off.getContext('2d');
         if (!ctx) continue;
-        await page.render({ canvasContext: ctx, viewport } as any).promise;
+        await page.render({ canvasContext: ctx, viewport, canvas: off }).promise;
         const dataUrl = off.toDataURL('image/png');
 
         if (worker) {
@@ -369,14 +371,14 @@ export async function ocr(): Promise<void> {
             scheduleWorkerTermination();
           });
 
-          const r: any = result;
-          const text = r?.text ?? r?.data?.text ?? r?.data?.text ?? '';
+          const r = result as { text?: string; data?: { text?: string } };
+          const text = r?.text ?? r?.data?.text ?? '';
           fullText += `--- Page ${pageNum} ---\n` + (text || '') + '\n\n';
           modal.updateText(fullText);
         } else {
           // Fallback: run Tesseract on main thread
           const res = await Tesseract.recognize(dataUrl, lang, {
-            logger: (m: any) => {
+            logger: (m: Tesseract.LoggerMessage) => {
               if (m && typeof m.progress === 'number') {
                 modal.updateProgress(Math.round(m.progress * 100));
               }

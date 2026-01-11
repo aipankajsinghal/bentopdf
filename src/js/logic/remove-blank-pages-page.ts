@@ -1,8 +1,8 @@
 import { PDFDocument } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import { createIcons, icons } from 'lucide';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 // State
 const pageState: {
@@ -326,3 +326,4 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '../../index.html';
     });
 });
+

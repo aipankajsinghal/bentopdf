@@ -1,14 +1,14 @@
 import { showLoader, hideLoader, showAlert } from '../ui.js';
 import { createIcons, icons } from 'lucide';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import { downloadFile, getPDFDocument, readFileAsArrayBuffer, formatBytes } from '../utils/helpers.js';
 import { state } from '../state.js';
 import { renderPagesProgressively, cleanupLazyRendering } from '../utils/render-utils.js';
 import JSZip from 'jszip';
 import { PDFDocument as PDFLibDocument } from 'pdf-lib';
 
-// @ts-ignore
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
+
 
 document.addEventListener('DOMContentLoaded', () => {
     let visualSelectorRendered = false;
@@ -391,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ]);
                     newPdf.addPage(copiedPage);
                     const pdfBytes = await newPdf.save();
-                    // @ts-ignore
+                    
                     zip.file(`page-${index + 1}.pdf`, pdfBytes);
                 }
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -536,3 +536,4 @@ document.addEventListener('DOMContentLoaded', () => {
         processBtn.addEventListener('click', split);
     }
 });
+

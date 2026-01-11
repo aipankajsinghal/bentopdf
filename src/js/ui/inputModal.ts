@@ -36,11 +36,7 @@ export function showInputModal(title: string, initialValue: string = ''): Promis
 
     const handleOk = () => {
       const val = input.value.trim();
-      if (val) {
-        resolve(val);
-      } else {
-        resolve(null);
-      }
+      resolve(val || null);
       cleanup();
     };
 

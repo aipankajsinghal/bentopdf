@@ -1,7 +1,7 @@
 // BentoPDF - File-First PDF Editor
 // Main entry point with Office-style ribbon UI
 import { createIcons, icons } from 'lucide';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from './utils/pdfjs-init.js';
 import '../css/styles.css';
 
 import { initRibbon, registerToolHandler, updateToolStates, setDocumentStateCallbacks } from './ribbon.js';
@@ -205,85 +205,78 @@ function registerToolHandlers(): void {
     return showToolNotImplemented(displayName);
   };
 
-  registerToolHandler('split-pdf', () => callToolOp('split-pdf', 'Split PDF'));
-  registerToolHandler('extract-pages', () => callToolOp('extract-pages', 'Extract Pages'));
-  registerToolHandler('delete-pages', () => callToolOp('delete-pages', 'Delete Pages'));
-  registerToolHandler('rotate-left', () => callToolOp('rotate-left', 'Rotate Left'));
-  registerToolHandler('rotate-right', () => callToolOp('rotate-right', 'Rotate Right'));
-  registerToolHandler('rotate-180', () => callToolOp('rotate-180', 'Rotate 180°'));
-  registerToolHandler('reverse-pages', () => callToolOp('reverse-pages', 'Reverse Pages'));
-  registerToolHandler('reorder', () => callToolOp('reorder', 'Reorder Pages'));
-  registerToolHandler('duplicate', () => callToolOp('duplicate', 'Duplicate Pages'));
-  registerToolHandler('add-blank', () => callToolOp('add-blank', 'Add Blank Page'));
-  registerToolHandler('crop', () => callToolOp('crop', 'Crop'));
-  registerToolHandler('n-up', () => callToolOp('n-up', 'N-Up'));
-  registerToolHandler('divide', () => callToolOp('divide', 'Divide Pages'));
-  registerToolHandler('combine-single', () => callToolOp('combine-single', 'Combine to Single'));
+  // Automated tool registration for standard operations
+  const standardOperations: Record<string, string> = {
+    'split-pdf': 'Split PDF',
+    'extract-pages': 'Extract Pages',
+    'delete-pages': 'Delete Pages',
+    'rotate-left': 'Rotate Left',
+    'rotate-right': 'Rotate Right',
+    'rotate-180': 'Rotate 180°',
+    'reverse-pages': 'Reverse Pages',
+    'reorder': 'Reorder Pages',
+    'duplicate': 'Duplicate Pages',
+    'add-blank': 'Add Blank Page',
+    'crop': 'Crop',
+    'n-up': 'N-Up',
+    'divide': 'Divide Pages',
+    'combine-single': 'Combine to Single',
+    'add-text': 'Add Text',
+    'sign': 'Sign PDF',
+    'stamps': 'Add Stamps',
+    'watermark': 'Watermark',
+    'page-numbers': 'Page Numbers',
+    'header-footer': 'Header/Footer',
+    'bookmarks': 'Bookmarks',
+    'toc': 'Table of Contents',
+    'fill-form': 'Fill Form',
+    'create-form': 'Create Form',
+    'invert-colors': 'Invert Colors',
+    'background-color': 'Background Color',
+    'text-color': 'Text Color',
+    'greyscale': 'Greyscale',
+    'remove-annotations': 'Remove Annotations',
+    'remove-blank-pages': 'Remove Blank Pages',
+    'image-to-pdf': 'Image to PDF',
+    'jpg-to-pdf': 'JPG to PDF',
+    'png-to-pdf': 'PNG to PDF',
+    'webp-to-pdf': 'WebP to PDF',
+    'svg-to-pdf': 'SVG to PDF',
+    'bmp-to-pdf': 'BMP to PDF',
+    'heic-to-pdf': 'HEIC to PDF',
+    'tiff-to-pdf': 'TIFF to PDF',
+    'text-to-pdf': 'Text to PDF',
+    'json-to-pdf': 'JSON to PDF',
+    'pdf-to-jpg': 'PDF to JPG',
+    'pdf-to-png': 'PDF to PNG',
+    'pdf-to-webp': 'PDF to WebP',
+    'pdf-to-bmp': 'PDF to BMP',
+    'pdf-to-tiff': 'PDF to TIFF',
+    'pdf-to-json': 'PDF to JSON',
+    'ocr': 'OCR',
+    'encrypt': 'Encrypt',
+    'decrypt': 'Decrypt',
+    'permissions': 'Permissions',
+    'remove-restrictions': 'Remove Restrictions',
+    'sanitize': 'Sanitize',
+    'remove-metadata': 'Remove Metadata',
+    'redact': 'Redact',
+    'flatten': 'Flatten',
+    'compress': 'Compress',
+    'linearize': 'Linearize',
+    'fix-size': 'Fix Page Size',
+    'repair': 'Repair',
+    'add-attachments': 'Add Attachments',
+    'extract-attachments': 'Extract Attachments',
+    'edit-attachments': 'Edit Attachments',
+    'metadata': 'Metadata',
+    'dimensions': 'Page Dimensions',
+    'compare': 'Compare PDFs'
+  };
 
-  // Edit tools
-  registerToolHandler('add-text', () => callToolOp('addText', 'Add Text'));
-  registerToolHandler('sign', () => callToolOp('sign', 'Sign PDF'));
-  registerToolHandler('stamps', () => callToolOp('stamps', 'Add Stamps'));
-  registerToolHandler('watermark', () => callToolOp('watermark', 'Watermark'));
-  registerToolHandler('page-numbers', () => callToolOp('page-numbers', 'Page Numbers'));
-  registerToolHandler('header-footer', () => callToolOp('header-footer', 'Header/Footer'));
-  registerToolHandler('bookmarks', () => callToolOp('bookmarks', 'Bookmarks'));
-  registerToolHandler('toc', () => callToolOp('toc', 'Table of Contents'));
-  registerToolHandler('fill-form', () => callToolOp('fill-form', 'Fill Form'));
-  registerToolHandler('create-form', () => callToolOp('create-form', 'Create Form'));
-
-  // Color operations
-  registerToolHandler('invert-colors', () => callToolOp('invert-colors', 'Invert Colors'));
-  registerToolHandler('background-color', () => callToolOp('background-color', 'Background Color'));
-  registerToolHandler('text-color', () => callToolOp('text-color', 'Text Color'));
-  registerToolHandler('greyscale', () => callToolOp('greyscale', 'Greyscale'));
-
-  // Cleanup
-  registerToolHandler('remove-annotations', () => callToolOp('remove-annotations', 'Remove Annotations'));
-  registerToolHandler('remove-blank-pages', () => callToolOp('remove-blank-pages', 'Remove Blank Pages'));
-
-  // Convert to PDF
-  registerToolHandler('image-to-pdf', () => callToolOp('image-to-pdf', 'Image to PDF'));
-  registerToolHandler('jpg-to-pdf', () => callToolOp('jpg-to-pdf', 'JPG to PDF'));
-  registerToolHandler('png-to-pdf', () => callToolOp('png-to-pdf', 'PNG to PDF'));
-  registerToolHandler('webp-to-pdf', () => callToolOp('webp-to-pdf', 'WebP to PDF'));
-  registerToolHandler('svg-to-pdf', () => callToolOp('svg-to-pdf', 'SVG to PDF'));
-  registerToolHandler('bmp-to-pdf', () => callToolOp('bmp-to-pdf', 'BMP to PDF'));
-  registerToolHandler('heic-to-pdf', () => callToolOp('heic-to-pdf', 'HEIC to PDF'));
-  registerToolHandler('tiff-to-pdf', () => callToolOp('tiff-to-pdf', 'TIFF to PDF'));
-  registerToolHandler('text-to-pdf', () => callToolOp('text-to-pdf', 'Text to PDF'));
-  registerToolHandler('json-to-pdf', () => callToolOp('json-to-pdf', 'JSON to PDF'));
-
-  // Convert from PDF
-  registerToolHandler('pdf-to-jpg', () => callToolOp('pdf-to-jpg', 'PDF to JPG'));
-  registerToolHandler('pdf-to-png', () => callToolOp('pdf-to-png', 'PDF to PNG'));
-  registerToolHandler('pdf-to-webp', () => callToolOp('pdf-to-webp', 'PDF to WebP'));
-  registerToolHandler('pdf-to-bmp', () => callToolOp('pdf-to-bmp', 'PDF to BMP'));
-  registerToolHandler('pdf-to-tiff', () => callToolOp('pdf-to-tiff', 'PDF to TIFF'));
-  registerToolHandler('pdf-to-json', () => callToolOp('pdf-to-json', 'PDF to JSON'));
-  registerToolHandler('ocr', () => callToolOp('ocr', 'OCR'));
-
-  // Security
-  registerToolHandler('encrypt', () => callToolOp('encrypt', 'Encrypt'));
-  registerToolHandler('decrypt', () => callToolOp('decrypt', 'Decrypt'));
-  registerToolHandler('permissions', () => callToolOp('permissions', 'Permissions'));
-  registerToolHandler('remove-restrictions', () => callToolOp('remove-restrictions', 'Remove Restrictions'));
-  registerToolHandler('sanitize', () => callToolOp('sanitize', 'Sanitize'));
-  registerToolHandler('remove-metadata', () => callToolOp('remove-metadata', 'Remove Metadata'));
-  registerToolHandler('redact', () => callToolOp('redact', 'Redact'));
-  registerToolHandler('flatten', () => callToolOp('flatten', 'Flatten'));
-
-  // Tools
-  registerToolHandler('compress', () => callToolOp('compress', 'Compress'));
-  registerToolHandler('linearize', () => callToolOp('linearize', 'Linearize'));
-  registerToolHandler('fix-size', () => callToolOp('fix-size', 'Fix Page Size'));
-  registerToolHandler('repair', () => callToolOp('repair', 'Repair'));
-  registerToolHandler('add-attachments', () => callToolOp('add-attachments', 'Add Attachments'));
-  registerToolHandler('extract-attachments', () => callToolOp('extract-attachments', 'Extract Attachments'));
-  registerToolHandler('edit-attachments', () => callToolOp('edit-attachments', 'Edit Attachments'));
-  registerToolHandler('metadata', () => callToolOp('metadata', 'Metadata'));
-  registerToolHandler('dimensions', () => callToolOp('dimensions', 'Page Dimensions'));
-  registerToolHandler('compare', () => callToolOp('compare', 'Compare PDFs'));
+  Object.entries(standardOperations).forEach(([id, name]) => {
+    registerToolHandler(id, () => callToolOp(id, name));
+  });
 }
 
 function showToolNotImplemented(toolName: string): void {
@@ -430,7 +423,6 @@ function setupKeyboardShortcuts(): void {
 
 const init = async () => {
   // Initialize PDF.js worker
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
   // Wire up callbacks to avoid circular dependencies
   setDocumentStateCallbacks(hasAnyDocument, getActiveDocument);

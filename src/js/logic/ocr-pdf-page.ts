@@ -5,10 +5,10 @@ import Tesseract from 'tesseract.js';
 import { PDFDocument as PDFLibDocument, StandardFonts, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { icons, createIcons } from 'lucide';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import { getFontForLanguage } from '../utils/font-loader.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 interface Word {
     text: string;
@@ -565,3 +565,4 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
+

@@ -1,10 +1,10 @@
 import { showLoader, hideLoader, showAlert } from '../ui.js';
 import { downloadFile, parsePageRanges, getPDFDocument, formatBytes } from '../utils/helpers.js';
 import { PDFDocument, PageSizes } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import { createIcons, icons } from 'lucide';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 interface PosterizeState {
     file: File | null;
@@ -398,3 +398,4 @@ document.addEventListener('DOMContentLoaded', function () {
         processBtn.addEventListener('click', posterize);
     }
 });
+

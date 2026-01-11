@@ -2,10 +2,10 @@ import { showLoader, hideLoader, showAlert } from '../ui.js';
 import { downloadFile, readFileAsArrayBuffer, getPDFDocument } from '../utils/helpers.js';
 import { state } from '../state.js';
 import Cropper from 'cropperjs';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import { PDFDocument as PDFLibDocument } from 'pdf-lib';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 // --- Global State for the Cropper Tool ---
 const cropperState = {
@@ -350,3 +350,4 @@ export async function setupCropperTool() {
     });
 
 }
+

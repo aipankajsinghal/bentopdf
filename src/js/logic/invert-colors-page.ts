@@ -2,9 +2,9 @@ import { createIcons, icons } from 'lucide';
 import { showAlert, showLoader, hideLoader } from '../ui.js';
 import { downloadFile, formatBytes, getPDFDocument } from '../utils/helpers.js';
 import { PDFDocument as PDFLibDocument } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 interface PageState { file: File | null; pdfDoc: PDFLibDocument | null; }
 const pageState: PageState = { file: null, pdfDoc: null };
@@ -129,3 +129,4 @@ async function invertColors() {
     } catch (e) { console.error(e); showAlert('Error', 'Could not invert PDF colors.'); }
     finally { hideLoader(); }
 }
+

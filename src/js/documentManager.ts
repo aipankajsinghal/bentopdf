@@ -1,6 +1,7 @@
 // Document Manager - Multi-document tabs with per-document undo/redo
 import { PDFDocument } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
+import { getSafeFilename } from './utils/helpers.js';
+import { pdfjsLib } from './utils/pdfjs-init.js';
 
 // Callbacks to avoid circular dependencies
 let updateToolStatesFn: () => void = () => {};
@@ -99,8 +100,8 @@ export async function createDocumentFromBytes(bytes: Uint8Array, fileName: strin
 
   renderTabs();
   updateToolStatesFn();
-  renderTabs();
-  updateToolStatesFn();
+  // We call refreshViewer to unhide the viewer and render thumbnails
+  refreshViewerFn();
   // Instead of just refreshing, we reset zoom to fit the new document
   resetViewerZoomFn();
 
@@ -300,38 +301,7 @@ export function downloadActiveDocument(): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const sanitizedBase = doc.fileName
-    .replace(/[<>:"/\\|?*]/g, '_')
-    .replace(/\.pdf$/i, '')
-    .trim();
-  const reservedNames = new Set([
-    'CON',
-    'PRN',
-    'AUX',
-    'NUL',
-    'COM1',
-    'COM2',
-    'COM3',
-    'COM4',
-    'COM5',
-    'COM6',
-    'COM7',
-    'COM8',
-    'COM9',
-    'LPT1',
-    'LPT2',
-    'LPT3',
-    'LPT4',
-    'LPT5',
-    'LPT6',
-    'LPT7',
-    'LPT8',
-    'LPT9',
-  ]);
-  const safeBaseName = sanitizedBase && !reservedNames.has(sanitizedBase.toUpperCase())
-    ? sanitizedBase
-    : `document-${Date.now()}`;
-  a.download = `${safeBaseName}_edited.pdf`;
+  a.download = getSafeFilename(doc.fileName, '_edited');
   a.click();
   URL.revokeObjectURL(url);
 

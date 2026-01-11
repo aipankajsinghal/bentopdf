@@ -2,11 +2,9 @@ import { PDFDocument, StandardFonts, rgb, TextAlignment, PDFName, PDFString, Pag
 import { initializeGlobalShortcuts } from '../utils/shortcuts-init.js'
 import { downloadFile, hexToRgb, getPDFDocument } from '../utils/helpers.js'
 import { createIcons, icons } from 'lucide'
-import * as pdfjsLib from 'pdfjs-dist'
+import { pdfjsLib } from '../utils/pdfjs-init.js'
 import 'pdfjs-dist/web/pdf_viewer.css'
 
-// Initialize PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
 
 import { FormField, PageData } from '../types/index.js'
 
@@ -916,7 +914,7 @@ function showProperties(field: FormField): void {
         </div>
         <div class="bg-blue-900/30 border border-blue-700/50 rounded p-2 mt-2">
             <p class="text-xs text-blue-200 flex gap-2">
-                <i data-lucide="info" class="w-4 h-4 flex-shrink-0"></i>
+                <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
                 <span><strong>Browser Note:</strong> Firefox and Chrome may show their native date picker format during selection. The correct format will apply when you finish entering the date. This is normal browser behavior and not an issue.</span>
             </p>
         </div>
@@ -2393,3 +2391,4 @@ if (errorModal) {
 }
 
 initializeGlobalShortcuts()
+

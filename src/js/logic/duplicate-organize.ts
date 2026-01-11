@@ -5,9 +5,9 @@ import { renderPagesProgressively, cleanupLazyRendering } from '../utils/render-
 import Sortable from 'sortablejs';
 import { icons, createIcons } from 'lucide';
 import { PDFDocument as PDFLibDocument } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 const duplicateOrganizeState = {
   sortableInstances: {},
@@ -217,3 +217,4 @@ export async function processAndSave() {
     hideLoader();
   }
 }
+

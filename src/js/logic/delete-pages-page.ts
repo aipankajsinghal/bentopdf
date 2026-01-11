@@ -2,9 +2,9 @@ import { createIcons, icons } from 'lucide';
 import { showAlert, showLoader, hideLoader } from '../ui.js';
 import { readFileAsArrayBuffer, formatBytes, downloadFile, getPDFDocument, parsePageRanges } from '../utils/helpers.js';
 import { PDFDocument } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 interface DeleteState {
     file: File | null;
@@ -272,3 +272,4 @@ function resetState() {
     const container = document.getElementById('delete-pages-preview');
     if (container) container.innerHTML = '';
 }
+

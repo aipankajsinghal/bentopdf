@@ -5,10 +5,8 @@ import { renderPagesProgressively, cleanupLazyRendering } from './utils/render-u
 import { icons, createIcons } from 'lucide';
 import Sortable from 'sortablejs';
 import { getRotationState, updateRotationState } from './utils/rotation-state.js';
-import * as pdfjsLib from 'pdfjs-dist';
-import { t } from './i18n/i18n';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+import { pdfjsLib } from './utils/pdfjs-init.js';
+import { t } from './i18n/i18n.js';
 
 
 // Centralizing DOM element selection
@@ -161,8 +159,7 @@ export const renderPageThumbnails = async (toolId: any, pdfDoc: any) => {
     // Function to create wrapper element for each page
     const createWrapper = (canvas: HTMLCanvasElement, pageNumber: number) => {
         const wrapper = document.createElement('div');
-        // @ts-expect-error TS(2322) FIXME: Type 'number' is not assignable to type 'string'.
-        wrapper.dataset.pageIndex = pageNumber - 1;
+        wrapper.dataset.pageIndex = (pageNumber - 1).toString();
 
         const imgContainer = document.createElement('div');
         imgContainer.className =
@@ -407,13 +404,16 @@ export const renderFileDisplay = (container: any, files: any) => {
     }
 };
 
-const createFileInputHTML = (options = {}) => {
-    // @ts-expect-error TS(2339) FIXME: Property 'multiple' does not exist on type '{}'.
+interface FileInputOptions {
+    multiple?: boolean;
+    accept?: string;
+    showControls?: boolean;
+}
+
+const createFileInputHTML = (options: FileInputOptions = {}) => {
     const multiple = options.multiple ? 'multiple' : '';
-    // @ts-expect-error TS(2339) FIXME: Property 'accept' does not exist on type '{}'.
     const acceptedFiles = options.accept || 'application/pdf';
-    // @ts-expect-error TS(2339) FIXME: Property 'showControls' does not exist on type '{}... Remove this comment to see the full error message
-    const showControls = options.showControls || false; // NEW: Add this parameter
+    const showControls = options.showControls || false;
 
     return `
         <div id="drop-zone" class="relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-700 transition-colors duration-300">
@@ -429,7 +429,7 @@ const createFileInputHTML = (options = {}) => {
         ${showControls
             ? `
             <!-- NEW: Add control buttons for multi-file uploads -->
-            <div id="file-controls" class="hidden mt-4 flex gap-3">
+            <div id="file-controls" class="hidden mt-4 gap-3">
                 <button id="add-more-btn" class="btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2">
                     <i data-lucide="plus"></i> ${t('upload.addMore')}
                 </button>

@@ -2,10 +2,10 @@ import { createIcons, icons } from 'lucide';
 import { showLoader, hideLoader, showAlert } from '../ui.js';
 import { downloadFile, readFileAsArrayBuffer, formatBytes, getPDFDocument } from '../utils/helpers.js';
 import Cropper from 'cropperjs';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import { PDFDocument as PDFLibDocument } from 'pdf-lib';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 interface CropperState {
     pdfDoc: any;
@@ -379,3 +379,4 @@ function resetState() {
     const cropBtn = document.getElementById('crop-button') as HTMLButtonElement;
     if (cropBtn) cropBtn.disabled = true;
 }
+

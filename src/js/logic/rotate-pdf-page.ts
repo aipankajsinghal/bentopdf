@@ -3,9 +3,9 @@ import { downloadFile, formatBytes, getPDFDocument } from '../utils/helpers.js';
 import { createIcons, icons } from 'lucide';
 import { PDFDocument as PDFLibDocument, degrees } from 'pdf-lib';
 import { renderPagesProgressively, cleanupLazyRendering } from '../utils/render-utils.js';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 interface RotateState {
     file: File | null;
@@ -401,3 +401,4 @@ document.addEventListener('DOMContentLoaded', function () {
         processBtn.addEventListener('click', applyRotations);
     }
 });
+

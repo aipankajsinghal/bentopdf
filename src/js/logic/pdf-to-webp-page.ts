@@ -1,10 +1,10 @@
 import { showLoader, hideLoader, showAlert } from '../ui.js';
-import { downloadFile, formatBytes, readFileAsArrayBuffer, getPDFDocument } from '../utils/helpers.js';
+import { downloadFile, formatBytes, readFileAsArrayBuffer, getPDFDocument, setupQualitySlider } from '../utils/helpers.js';
 import { createIcons, icons } from 'lucide';
 import JSZip from 'jszip';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 let files: File[] = [];
 
@@ -70,10 +70,7 @@ const resetState = () => {
     files = [];
     const fileInput = document.getElementById('file-input') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
-    const qualitySlider = document.getElementById('webp-quality') as HTMLInputElement;
-    const qualityValue = document.getElementById('webp-quality-value');
-    if (qualitySlider) qualitySlider.value = '0.85';
-    if (qualityValue) qualityValue.textContent = '85%';
+    setupQualitySlider('webp-quality', 'webp-quality-value', 0.85);
     updateUI();
 };
 
@@ -131,8 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const dropZone = document.getElementById('drop-zone');
     const processBtn = document.getElementById('process-btn');
     const backBtn = document.getElementById('back-to-tools');
-    const qualitySlider = document.getElementById('webp-quality') as HTMLInputElement;
-    const qualityValue = document.getElementById('webp-quality-value');
 
     if (backBtn) {
         backBtn.addEventListener('click', () => {
@@ -140,11 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (qualitySlider && qualityValue) {
-        qualitySlider.addEventListener('input', () => {
-            qualityValue.textContent = `${Math.round(parseFloat(qualitySlider.value) * 100)}%`;
-        });
-    }
+    setupQualitySlider('webp-quality', 'webp-quality-value', 0.85);
 
     const handleFileSelect = (newFiles: FileList | null) => {
         if (!newFiles || newFiles.length === 0) return;
@@ -191,3 +182,4 @@ document.addEventListener('DOMContentLoaded', () => {
         processBtn.addEventListener('click', convert);
     }
 });
+

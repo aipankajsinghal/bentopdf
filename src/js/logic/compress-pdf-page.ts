@@ -7,10 +7,10 @@ import {
 } from '../utils/helpers.js';
 import { state } from '../state.js';
 import { createIcons, icons } from 'lucide';
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '../utils/pdfjs-init.js';
 import { PDFDocument, PDFName, PDFDict, PDFStream, PDFNumber } from 'pdf-lib';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
 
 function dataUrlToBytes(dataUrl: any) {
     const base64 = dataUrl.split(',')[1];
@@ -551,3 +551,4 @@ document.addEventListener('DOMContentLoaded', () => {
         processBtn.addEventListener('click', compress);
     }
 });
+

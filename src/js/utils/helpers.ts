@@ -2,7 +2,7 @@ import createModule from '@neslinesli93/qpdf-wasm';
 import { showLoader, hideLoader, showAlert } from '../ui.js';
 import { createIcons } from 'lucide';
 import { state, resetState } from '../state.js';
-import * as pdfjsLib from 'pdfjs-dist'
+import { pdfjsLib } from './pdfjs-init.js'
 
 
 const STANDARD_SIZES = {
@@ -14,7 +14,7 @@ const STANDARD_SIZES = {
   A5: { width: 419.53, height: 595.28 },
 };
 
-export function getStandardPageName(width: any, height: any) {
+export function getStandardPageName(width: number, height: number): string {
   const tolerance = 1; // Allow for minor floating point variations
   for (const [name, size] of Object.entries(STANDARD_SIZES)) {
     if (
@@ -29,7 +29,7 @@ export function getStandardPageName(width: any, height: any) {
   return 'Custom';
 }
 
-export function convertPoints(points: any, unit: any) {
+export function convertPoints(points: number, unit: string): string {
   let result = 0;
   switch (unit) {
     case 'in':
@@ -60,7 +60,7 @@ export function hexToRgb(hex: string): { r: number; g: number; b: number } {
     : { r: 0, g: 0, b: 0 }
 }
 
-export const formatBytes = (bytes: any, decimals = 1) => {
+export const formatBytes = (bytes: number, decimals: number = 1): string => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
@@ -80,10 +80,10 @@ export const downloadFile = (blob: Blob, filename: string): void => {
   URL.revokeObjectURL(url);
 };
 
-export const readFileAsArrayBuffer = (file: any) => {
+export const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
     reader.onerror = (error) => reject(error);
     reader.readAsArrayBuffer(file);
   });
@@ -139,7 +139,7 @@ export function parsePageRanges(rangeString: string, totalPages: number): number
  * @param {string} isoDateString - The ISO 8601 date string.
  * @returns {string} A localized date and time string, or the original string if parsing fails.
  */
-export function formatIsoDate(isoDateString) {
+export function formatIsoDate(isoDateString: string): string {
   if (!isoDateString || typeof isoDateString !== 'string') {
     return isoDateString; // Return original value if it's not a valid string
   }
@@ -282,4 +282,57 @@ export function getPDFDocument(src: any) {
     ...params,
     wasmUrl: import.meta.env.BASE_URL + 'pdfjs-viewer/wasm/',
   });
+}
+
+/**
+ * Sets up a quality slider with a display value.
+ * @param sliderId The ID of the input slider element
+ * @param valueDisplayId The ID of the element to display the percentage value
+ * @param defaultValue The initial value (0.0 to 1.0)
+ */
+export function setupQualitySlider(
+  sliderId: string,
+  valueDisplayId: string,
+  defaultValue: number = 0.9
+): void {
+  const slider = document.getElementById(sliderId) as HTMLInputElement;
+  const display = document.getElementById(valueDisplayId);
+
+  if (!slider) return;
+
+  slider.value = defaultValue.toString();
+  if (display) {
+    display.textContent = `${Math.round(defaultValue * 100)}%`;
+  }
+
+  slider.addEventListener('input', () => {
+    if (display) {
+      display.textContent = `${Math.round(parseFloat(slider.value) * 100)}%`;
+    }
+  });
+}
+
+/**
+ * Sanitizes a filename to be safe for saving.
+ * @param fileName The original filename
+ * @param suffix An optional suffix to add before .pdf
+ * @returns A safe filename string
+ */
+export function getSafeFilename(fileName: string, suffix: string = ''): string {
+  const sanitizedBase = fileName
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replace(/\.pdf$/i, '')
+    .trim();
+
+  const reservedNames = new Set([
+    'CON', 'PRN', 'AUX', 'NUL',
+    'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+    'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+  ]);
+
+  const safeBaseName = sanitizedBase && !reservedNames.has(sanitizedBase.toUpperCase())
+    ? sanitizedBase
+    : `document-${Date.now()}`;
+
+  return `${safeBaseName}${suffix}.pdf`;
 }
