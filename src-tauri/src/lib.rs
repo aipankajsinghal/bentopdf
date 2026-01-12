@@ -1,6 +1,6 @@
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    Manager, Emitter,
+    Manager, Emitter, WindowEvent,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -143,7 +143,6 @@ pub fn run() {
             app.set_menu(menu)?;
 
             // Handle menu events
-            let app_handle_menu = app_handle.clone();
             app.on_menu_event(move |app, event| {
                 let window = app.get_webview_window("main");
                 if let Some(win) = window {
@@ -155,30 +154,33 @@ pub fn run() {
                 log::info!("Menu action: {}", event.id().0);
             });
 
-            // Handle file drop events
+            // Handle file drop events via window events
             let main_window = app.get_webview_window("main").unwrap();
-            main_window.on_drag_drop_event(move |event| {
-                match event {
-                    tauri::DragDropEvent::Drop { paths, position: _ } => {
-                        // Filter for PDF files
-                        let pdf_paths: Vec<String> = paths
-                            .iter()
-                            .filter(|p| {
-                                p.extension()
-                                    .map(|ext| ext.to_string_lossy().to_lowercase() == "pdf")
-                                    .unwrap_or(false)
-                            })
-                            .map(|p| p.to_string_lossy().to_string())
-                            .collect();
+            let window_clone = main_window.clone();
+            main_window.on_window_event(move |event| {
+                if let WindowEvent::DragDrop(drag_drop) = event {
+                    match drag_drop {
+                        tauri::DragDropEvent::Drop { paths, position: _ } => {
+                            // Filter for PDF files
+                            let pdf_paths: Vec<String> = paths
+                                .iter()
+                                .filter(|p| {
+                                    p.extension()
+                                        .map(|ext| ext.to_string_lossy().to_lowercase() == "pdf")
+                                        .unwrap_or(false)
+                                })
+                                .map(|p| p.to_string_lossy().to_string())
+                                .collect();
 
-                        if !pdf_paths.is_empty() {
-                            log::info!("Files dropped: {:?}", pdf_paths);
-                            // This will be handled by the frontend
+                            if !pdf_paths.is_empty() {
+                                log::info!("Files dropped: {:?}", pdf_paths);
+                                // Emit event to frontend
+                                let _ = window_clone.emit("file-drop", &pdf_paths);
+                            }
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
-                true // Don't prevent default behavior
             });
 
             Ok(())

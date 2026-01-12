@@ -228,7 +228,8 @@ export async function onFileDrop(callback: (paths: string[]) => void): Promise<(
   const event = await getEventModule();
   if (!event) return null;
 
-  const unlisten = await event.listen<{ paths: string[] }>('tauri://drag-drop', (e) => {
+  // Listen to native Tauri drag-drop event
+  const unlisten1 = await event.listen<{ paths: string[] }>('tauri://drag-drop', (e) => {
     // Filter for PDF files
     const pdfPaths = e.payload.paths.filter(p => p.toLowerCase().endsWith('.pdf'));
     if (pdfPaths.length > 0) {
@@ -236,7 +237,19 @@ export async function onFileDrop(callback: (paths: string[]) => void): Promise<(
     }
   });
 
-  return unlisten;
+  // Also listen to custom file-drop event from Rust backend
+  const unlisten2 = await event.listen<string[]>('file-drop', (e) => {
+    // Already filtered for PDF in Rust
+    if (e.payload.length > 0) {
+      callback(e.payload);
+    }
+  });
+
+  // Return combined unlisten function
+  return () => {
+    unlisten1();
+    unlisten2();
+  };
 }
 
 /**
