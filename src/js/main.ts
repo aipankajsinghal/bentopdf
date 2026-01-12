@@ -4,7 +4,7 @@ import { createIcons, icons } from 'lucide';
 import { pdfjsLib } from './utils/pdfjs-init.js';
 import '../css/styles.css';
 
-import { initRibbon, registerToolHandler, updateToolStates, setDocumentStateCallbacks } from './ribbon.js';
+import { initRibbon, registerToolHandler, updateToolStates, setDocumentStateCallbacks, toggleRibbonExpanded } from './ribbon.js';
 import {
   initDocumentManager,
   openDocument,
@@ -14,6 +14,7 @@ import {
   undo,
   redo,
   setDocumentManagerCallbacks,
+  closeActiveDocument,
 } from './documentManager.js';
 import * as toolOps from './toolOperations.js';
 import {
@@ -28,7 +29,17 @@ import {
   toggleThumbnails,
   resetViewerZoom,
 } from './viewer.js';
-import { setProcessing } from './state.js';
+import { setProcessing, selectAllPages, clearPageSelection } from './state.js';
+import {
+  isTauri,
+  initTauriIntegrations,
+  openPdfDialog,
+  savePdf,
+  readFile,
+  setCurrentFilePath,
+  getFileName,
+  showMessage,
+} from './tauri-api.js';
 
 // ============================================================================
 // Drop Zone Setup
@@ -94,7 +105,7 @@ function setupDropZone(): void {
 
 async function handleFiles(files: File[]): Promise<void> {
   const pdfFiles = files.filter(
-    (f) => f.type === 'application/pdf' && f.name.toLowerCase().endsWith('.pdf')
+    (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
   );
 
   if (pdfFiles.length === 0) {
@@ -114,6 +125,102 @@ async function handleFiles(files: File[]): Promise<void> {
     showAlert('Error', 'Failed to open PDF file. The file may be corrupted or password-protected.');
   } finally {
     setProcessing(false);
+  }
+}
+
+/**
+ * Open files using Tauri native dialog (desktop app)
+ */
+async function openFilesNative(): Promise<void> {
+  if (!isTauri()) {
+    // Fallback to regular file input
+    const fileInput = document.getElementById('file-input') as HTMLInputElement;
+    fileInput?.click();
+    return;
+  }
+
+  const paths = await openPdfDialog();
+  if (!paths || paths.length === 0) return;
+
+  setProcessing(true);
+
+  try {
+    for (const path of paths) {
+      const bytes = await readFile(path);
+      if (bytes) {
+        const fileName = getFileName(path);
+        const file = new File([new Uint8Array(bytes)], fileName, { type: 'application/pdf' });
+        await openDocument(file);
+        // Track the file path for "Save" functionality
+        setCurrentFilePath(path);
+      }
+    }
+    showViewerToolbar();
+  } catch (error) {
+    console.error('Error opening PDF:', error);
+    showAlert('Error', 'Failed to open PDF file.');
+  } finally {
+    setProcessing(false);
+  }
+}
+
+/**
+ * Open files from native file drop (Tauri desktop)
+ */
+async function handleNativeFileDrop(paths: string[]): Promise<void> {
+  setProcessing(true);
+
+  try {
+    for (const path of paths) {
+      const bytes = await readFile(path);
+      if (bytes) {
+        const fileName = getFileName(path);
+        const file = new File([new Uint8Array(bytes)], fileName, { type: 'application/pdf' });
+        await openDocument(file);
+        setCurrentFilePath(path);
+      }
+    }
+    showViewerToolbar();
+  } catch (error) {
+    console.error('Error opening dropped PDF:', error);
+    showAlert('Error', 'Failed to open dropped PDF file.');
+  } finally {
+    setProcessing(false);
+  }
+}
+
+/**
+ * Save the active document (Tauri native save)
+ */
+async function saveActiveDocument(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  if (isTauri()) {
+    const result = await savePdf(doc.pdfBytes, doc.fileName, false);
+    if (result.success && result.path) {
+      await showMessage('Saved', `File saved to:\n${result.path}`, 'info');
+    }
+  } else {
+    // Fallback to browser download
+    downloadActiveDocument();
+  }
+}
+
+/**
+ * Save As - always show dialog
+ */
+async function saveAsDocument(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  if (isTauri()) {
+    const result = await savePdf(doc.pdfBytes, doc.fileName, true);
+    if (result.success && result.path) {
+      await showMessage('Saved', `File saved to:\n${result.path}`, 'info');
+    }
+  } else {
+    downloadActiveDocument();
   }
 }
 
@@ -152,11 +259,8 @@ function setupViewerToolbar(): void {
 // ============================================================================
 
 function registerToolHandlers(): void {
-  // File operations
-  registerToolHandler('open-file', () => {
-    const fileInput = document.getElementById('file-input') as HTMLInputElement;
-    fileInput?.click();
-  });
+  // File operations - use native dialog in Tauri
+  registerToolHandler('open-file', openFilesNative);
 
   registerToolHandler('download', downloadActiveDocument);
   registerToolHandler('add-pdf', () => {
@@ -272,7 +376,10 @@ function registerToolHandlers(): void {
     'edit-attachments': 'Edit Attachments',
     'metadata': 'Metadata',
     'dimensions': 'Page Dimensions',
-    'compare': 'Compare PDFs'
+    'compare': 'Compare PDFs',
+    'copy-pages': 'Copy Pages',
+    'cut-pages': 'Cut Pages',
+    'paste-pages': 'Paste Pages'
   };
 
   Object.entries(standardOperations).forEach(([id, name]) => {
@@ -415,6 +522,33 @@ function setupKeyboardShortcuts(): void {
       await redo();
       return;
     }
+
+    // Ctrl/Cmd + C - Copy pages
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'c') {
+      if (getActiveDocument()) {
+        e.preventDefault();
+        await toolOps.copyPages?.();
+      }
+      return;
+    }
+
+    // Ctrl/Cmd + X - Cut pages
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'x') {
+      if (getActiveDocument()) {
+        e.preventDefault();
+        await toolOps.cutPages?.();
+      }
+      return;
+    }
+
+    // Ctrl/Cmd + V - Paste pages
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'v') {
+      if (getActiveDocument()) {
+        e.preventDefault();
+        await toolOps.pastePages?.();
+      }
+      return;
+    }
   });
 }
 
@@ -462,10 +596,83 @@ const init = async () => {
   // Setup keyboard shortcuts
   setupKeyboardShortcuts();
 
+  // Initialize Tauri integrations (native menu, file drop, etc.)
+  if (isTauri()) {
+    await initTauriIntegrations({
+      onOpen: openFilesNative,
+      onSave: saveActiveDocument,
+      onSaveAs: saveAsDocument,
+      onExport: downloadActiveDocument,
+      onCloseDoc: () => {
+        if (typeof closeActiveDocument === 'function') {
+          closeActiveDocument();
+        }
+      },
+      onUndo: () => undo(),
+      onRedo: () => redo(),
+      onCopyPages: () => toolOps.copyPages?.(),
+      onCutPages: () => toolOps.cutPages?.(),
+      onPastePages: () => toolOps.pastePages?.(),
+      onSelectAll: () => {
+        const doc = getActiveDocument();
+        if (doc && typeof selectAllPages === 'function') {
+          selectAllPages(doc.pageData?.length || 1);
+        }
+      },
+      onDeselect: () => {
+        if (typeof clearPageSelection === 'function') {
+          clearPageSelection();
+        }
+      },
+      onZoomIn: zoomIn,
+      onZoomOut: zoomOut,
+      onFitPage: fitToPage,
+      onToggleThumbnails: toggleThumbnails,
+      onToggleRibbon: () => {
+        if (typeof toggleRibbonExpanded === 'function') {
+          toggleRibbonExpanded();
+        }
+      },
+      onRotateLeft: () => toolOps.rotateLeft?.(),
+      onRotateRight: () => toolOps.rotateRight?.(),
+      onAddBlank: () => toolOps.addBlankPage?.(),
+      onDeletePages: () => toolOps.deletePages?.(),
+      onCompress: () => toolOps.compress?.(),
+      onOcr: () => toolOps.ocr?.(),
+      onAbout: () => showAlert('About BentoPDF', 'BentoPDF v1.11.2\n\nA powerful PDF toolkit for editing, converting, and managing PDF documents.\n\nhttps://bentopdf.com'),
+      onShortcuts: () => {
+        const shortcuts = `Keyboard Shortcuts:
+
+Ctrl+O - Open PDF
+Ctrl+S - Save
+Ctrl+Shift+S - Save As
+Ctrl+Z - Undo
+Ctrl+Shift+Z - Redo
+Ctrl+C - Copy Pages
+Ctrl+X - Cut Pages
+Ctrl+V - Paste Pages
+Ctrl+A - Select All Pages
+Escape - Deselect All
+Ctrl+Plus - Zoom In
+Ctrl+Minus - Zoom Out
+Ctrl+0 - Fit to Page
+Ctrl+T - Toggle Thumbnails
+Ctrl+F1 - Toggle Ribbon Labels
+Ctrl+Left - Rotate Left
+Ctrl+Right - Rotate Right
+Ctrl+N - Add Blank Page
+Delete - Delete Selected Pages`;
+        showAlert('Keyboard Shortcuts', shortcuts);
+      },
+      onFileDrop: handleNativeFileDrop,
+    });
+    console.log('BentoPDF initialized - Desktop Edition (Tauri)');
+  } else {
+    console.log('BentoPDF initialized - Web Edition');
+  }
+
   // Initialize icons
   createIcons({ icons });
-
-  console.log('BentoPDF initialized - File-First Edition');
 };
 
 window.addEventListener('load', init);

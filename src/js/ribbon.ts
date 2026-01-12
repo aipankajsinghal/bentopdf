@@ -262,8 +262,20 @@ function setupRibbonEvents(): void {
 function closeOpenDropdown(): void {
   if (openDropdown) {
     openDropdown.classList.add('hidden');
-    openDropdown = null;
   }
+  openDropdown = null;
+}
+
+/**
+ * Toggle ribbon expanded mode (show/hide tool labels)
+ */
+export function toggleRibbonExpanded(): void {
+  const container = document.getElementById('ribbon');
+  if (!container) return;
+
+  expandedMode = !expandedMode;
+  localStorage.setItem('ribbon-expanded', expandedMode ? 'true' : 'false');
+  renderRibbon(container);
 }
 
 // Update tool enable/disable states based on document state
