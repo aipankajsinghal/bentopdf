@@ -143,7 +143,6 @@ pub fn run() {
             app.set_menu(menu)?;
 
             // Handle menu events
-            let app_handle_menu = app_handle.clone();
             app.on_menu_event(move |app, event| {
                 let window = app.get_webview_window("main");
                 if let Some(win) = window {
