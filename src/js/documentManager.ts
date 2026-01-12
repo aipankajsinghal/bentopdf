@@ -32,9 +32,25 @@ export interface PageData {
   deleted: boolean;
 }
 
+// Annotation Types (Mirrors AnnotationLayer types)
+export interface Annotation {
+  id: string;
+  type: 'none' | 'pen' | 'highlight' | 'rectangle' | 'circle' | 'eraser';
+  page: number;
+  points?: {x:number, y:number}[]; 
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  color: string;
+  strokeWidth: number;
+  opacity: number;
+}
+
 export interface DocumentSnapshot {
   pagesData: PageData[];
   pdfBytes: Uint8Array;
+  annotations: Annotation[];
 }
 
 export interface Document {
@@ -44,6 +60,7 @@ export interface Document {
   pdfDoc: PDFDocument | null;
   pdfJsDoc: pdfjsLib.PDFDocumentProxy | null;
   pageData: PageData[];
+  annotations: Annotation[];
   undoStack: DocumentSnapshot[];
   redoStack: DocumentSnapshot[];
   isDirty: boolean;
@@ -89,6 +106,7 @@ export async function createDocumentFromBytes(bytes: Uint8Array, fileName: strin
     pdfDoc,
     pdfJsDoc,
     pageData,
+    annotations: [],
     undoStack: [],
     redoStack: [],
     isDirty: false,
@@ -205,6 +223,7 @@ export function pushUndoState(doc: Document): void {
   const snapshot: DocumentSnapshot = {
     pagesData: JSON.parse(JSON.stringify(doc.pageData)),
     pdfBytes: new Uint8Array(doc.pdfBytes),
+    annotations: JSON.parse(JSON.stringify(doc.annotations || [])),
   };
   doc.undoStack.push(snapshot);
   doc.redoStack = []; // Clear redo on new action
@@ -221,12 +240,14 @@ export async function undo(): Promise<boolean> {
   const currentSnapshot: DocumentSnapshot = {
     pagesData: JSON.parse(JSON.stringify(doc.pageData)),
     pdfBytes: doc.pdfBytes.slice(),
+    annotations: JSON.parse(JSON.stringify(doc.annotations || [])),
   };
   doc.redoStack.push(currentSnapshot);
 
   // Restore previous state
   const snapshot = doc.undoStack.pop()!;
   doc.pageData = snapshot.pagesData;
+  doc.annotations = snapshot.annotations || [];
   doc.pdfBytes = snapshot.pdfBytes;
   doc.pdfDoc = await PDFDocument.load(snapshot.pdfBytes, { ignoreEncryption: true });
   doc.pdfJsDoc?.destroy();
@@ -245,12 +266,14 @@ export async function redo(): Promise<boolean> {
   const currentSnapshot: DocumentSnapshot = {
     pagesData: JSON.parse(JSON.stringify(doc.pageData)),
     pdfBytes: doc.pdfBytes.slice(),
+    annotations: JSON.parse(JSON.stringify(doc.annotations || [])),
   };
   doc.undoStack.push(currentSnapshot);
 
   // Restore redo state
   const snapshot = doc.redoStack.pop()!;
   doc.pageData = snapshot.pagesData;
+  doc.annotations = snapshot.annotations || [];
   doc.pdfBytes = snapshot.pdfBytes;
   doc.pdfDoc = await PDFDocument.load(snapshot.pdfBytes, { ignoreEncryption: true });
   doc.pdfJsDoc?.destroy();

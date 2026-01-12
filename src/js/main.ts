@@ -2,6 +2,11 @@
 // Main entry point with Office-style ribbon UI
 import { createIcons, icons } from 'lucide';
 import { pdfjsLib } from './utils/pdfjs-init.js';
+import { aiClient } from './ai/ai-client.js';
+import { aiPanel } from './ui/aiPanel.js';
+import { batchModal } from './ui/batchProcessModal.js';
+import { annotationLayer } from './logic/annotationLayer.js';
+import { initContextMenu } from './ui/contextMenu.js';
 import '../css/styles.css';
 
 import { initRibbon, registerToolHandler, updateToolStates, setDocumentStateCallbacks, toggleRibbonExpanded } from './ribbon.js';
@@ -296,6 +301,42 @@ function registerToolHandlers(): void {
   registerToolHandler('zoom-out', zoomOut);
   registerToolHandler('fit-page', fitToPage);
 
+  registerToolHandler('fit-page', fitToPage);
+
+  registerToolHandler('fit-page', fitToPage);
+
+  // Drawing Tools
+  registerToolHandler('draw-pen', () => annotationLayer.setTool('pen'));
+  registerToolHandler('draw-highlight', () => annotationLayer.setTool('highlight'));
+  registerToolHandler('draw-rect', () => annotationLayer.setTool('rectangle'));
+  registerToolHandler('draw-circle', () => annotationLayer.setTool('circle'));
+  registerToolHandler('draw-eraser', () => annotationLayer.setTool('eraser'));
+  registerToolHandler('draw-color', () => {
+     // Simple prompt for now, proper picker in v2
+     const color = prompt("Enter color (hex or name):", "#ff0000");
+     if (color) annotationLayer.setColor(color);
+  });
+
+  // AI Tools
+  registerToolHandler('ai-panel-toggle', () => aiPanel.toggle());
+  registerToolHandler('ai-ocr', () => {
+    aiPanel.toggle(true);
+    // Auto-trigger OCR if exposed or just open panel
+    // The panel has buttons, let's just open the panel for now
+    // Or we could trigger the method via a public API on aiPanel?
+    // Let's assume user clicks the button in the panel.
+  });
+  registerToolHandler('ai-translate', () => {
+    aiPanel.toggle(true);
+    // Focus translation section
+  });
+  registerToolHandler('ai-summarize', () => {
+     aiPanel.toggle(true);
+  });
+  registerToolHandler('ai-batch', () => {
+      batchModal.open();
+  });
+
   // Page operations - wired to toolOperations where available
   const toolOpAliases: Record<string, string> = {
     'split-pdf': 'splitPDF',
@@ -433,6 +474,34 @@ function setupSettingsModal(): void {
   if (thumbsToggle) {
     thumbsToggle.addEventListener('change', () => {
       toggleThumbnails();
+    });
+  }
+    thumbsToggle.addEventListener('change', () => {
+      toggleThumbnails();
+    });
+  }
+
+  // API Key handling
+  const apiKeyInput = document.getElementById('gemini-api-key') as HTMLInputElement;
+  const saveKeyBtn = document.getElementById('save-api-key-btn');
+  const keyStatus = document.getElementById('api-key-status');
+
+  if (apiKeyInput && saveKeyBtn) {
+    // Load existing key
+    if (aiClient.hasKey()) {
+      apiKeyInput.value = aiClient.getApiKey();
+    }
+
+    saveKeyBtn.addEventListener('click', () => {
+      const key = apiKeyInput.value.trim();
+      if (key) {
+        aiClient.setApiKey(key);
+        if (keyStatus) {
+          keyStatus.textContent = 'Key saved!';
+          keyStatus.classList.remove('hidden');
+          setTimeout(() => keyStatus.classList.add('hidden'), 2000);
+        }
+      }
     });
   }
 }
@@ -595,6 +664,26 @@ const init = async () => {
 
   // Setup keyboard shortcuts
   setupKeyboardShortcuts();
+
+  // Setup keyboard shortcuts
+  setupKeyboardShortcuts();
+
+  // Inject AI Panel
+  const viewerArea = document.getElementById('viewer-area');
+  // We want to inject it alongside the PDF viewer, maybe as a right sidebar?
+  // Let's modify the DOM structure slightly in index.html or just append and use absolute/flex?
+  // The 'viewer-area' is a flexbox? 
+  // Let's look at index.html: <div class="flex flex-1 overflow-hidden min-h-0"> ... <div id="viewer-area"> ...
+  // We should append the AI panel to the parent of `viewer-area` so it sits side-by-side
+  
+  // Actually, let's append it to `document.body` or specialized container?
+  // Our AIPanel code creates a div with class "w-80 ... flex flex-col hidden"
+  // If we append it to the main flex container, it will take space when visible.
+  
+  const mainFlex = document.querySelector('.flex.flex-1.overflow-hidden.min-h-0');
+  if (mainFlex) {
+      mainFlex.appendChild(aiPanel.getContainer());
+  }
 
   // Initialize Tauri integrations (native menu, file drop, etc.)
   if (isTauri()) {

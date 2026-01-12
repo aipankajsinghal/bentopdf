@@ -2,6 +2,8 @@
 import { pdfjsLib } from './utils/pdfjs-init.js';
 import { getActiveDocument, Document } from './documentManager.js';
 import { createIcons, icons } from 'lucide';
+import { annotationLayer } from './logic/annotationLayer.js';
+import { initSearch } from './bg-search.js';
 
 // ============================================================================
 // State
@@ -36,6 +38,7 @@ export async function refreshViewer(): Promise<void> {
   await renderCurrentPage(doc);
   renderThumbnails(doc);
   updatePageIndicator(doc);
+  annotationLayer.renderAnnotations(doc.currentPage); // Restore annotations
 }
 
 export async function resetViewerZoom(): Promise<void> {
@@ -50,6 +53,7 @@ export async function resetViewerZoom(): Promise<void> {
 
 async function renderCurrentPage(doc: Document): Promise<void> {
   const canvas = document.getElementById('viewer-canvas') as HTMLCanvasElement;
+  const textLayerDiv = document.getElementById('text-layer');
   if (!canvas || !doc.pdfJsDoc) return;
 
   try {
@@ -98,6 +102,25 @@ async function renderCurrentPage(doc: Document): Promise<void> {
       // clear the reference when done
       currentRenderTask = null;
     }
+
+    // Render Text Layer
+    if (textLayerDiv) {
+        textLayerDiv.innerHTML = ''; // Clear previous
+        // Ensure absolute positioning match
+        textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
+        textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
+        // CSS transform to match scaling if necessary, usually pdf.js text layer needs explicit vars
+        textLayerDiv.style.setProperty('--scale-factor', String(currentZoom));
+
+        const textContent = await page.getTextContent();
+        pdfjsLib.renderTextLayer({
+            textContent,
+            container: textLayerDiv,
+            viewport,
+            textDivs: []
+        });
+    }
+
   } catch (error) {
     console.error('Error rendering page:', error);
   }
@@ -411,6 +434,9 @@ export function initViewer(): void {
 
   // Initial state
   updateZoomIndicator();
+
+  // Init Search
+  initSearch();
 }
 
 // ============================================================================

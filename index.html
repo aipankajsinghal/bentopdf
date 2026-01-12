@@ -50,6 +50,18 @@
           id="viewer-toolbar"
           class="hidden flex items-center justify-between bg-gray-800/50 border-b border-gray-700 px-3 py-1"
         >
+          <!-- Search Bar (Hidden by default) -->
+          <div id="search-bar-container" class="hidden flex items-center gap-2 bg-gray-900 border border-gray-600 rounded px-2 py-0.5 mr-2">
+             <input type="text" id="search-input" placeholder="Find text..." class="bg-transparent border-none text-white text-xs focus:ring-0 outline-none w-32">
+             <span id="search-count" class="text-xs text-gray-500">0/0</span>
+             <button id="search-prev-btn" class="p-0.5 text-gray-400 hover:text-white"><i data-lucide="chevron-up" class="w-3 h-3"></i></button>
+             <button id="search-next-btn" class="p-0.5 text-gray-400 hover:text-white"><i data-lucide="chevron-down" class="w-3 h-3"></i></button>
+             <button id="search-close-btn" class="p-0.5 text-gray-400 hover:text-white ml-1"><i data-lucide="x" class="w-3 h-3"></i></button>
+          </div>
+          <button id="search-toggle-btn" class="p-1 text-gray-400 hover:text-white mr-2" title="Find (Ctrl+F)">
+             <i data-lucide="search" class="w-4 h-4"></i>
+          </button>
+
           <div class="flex items-center gap-2">
             <button
               id="prev-page-btn"
@@ -147,8 +159,12 @@
           </div>
 
           <!-- PDF Viewer (hidden until document loaded) -->
-          <div id="pdf-viewer" class="hidden p-4">
-            <canvas id="viewer-canvas" class="shadow-xl rounded"></canvas>
+          <div id="pdf-viewer" class="hidden p-4 text-center">
+            <div id="page-container" class="relative inline-block shadow-xl rounded">
+               <canvas id="viewer-canvas" class="block"></canvas>
+               <div id="text-layer" class="absolute inset-0 w-full h-full"></div>
+               <svg id="annotation-layer" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
+            </div>
           </div>
         </div>
       </div>
@@ -318,6 +334,31 @@
                 class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"
               ></div>
             </label>
+          </div>
+        </div>
+          
+          <div class="flex flex-col gap-2 p-4 bg-gray-900 rounded-lg border border-gray-700">
+            <label for="gemini-api-key" class="text-sm font-medium text-gray-200">
+              Gemini API Key
+            </label>
+            <p class="text-xs text-gray-400 mb-1">
+              Required for AI features (OCR, Translation, Summarization)
+            </p>
+            <div class="flex gap-2">
+              <input
+                type="password"
+                id="gemini-api-key"
+                class="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none transition-all placeholder-gray-500"
+                placeholder="Enter AIza..."
+              />
+              <button
+                id="save-api-key-btn"
+                class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded transition-colors"
+              >
+                Save
+              </button>
+            </div>
+            <p id="api-key-status" class="text-xs text-green-400 hidden">Key saved!</p>
           </div>
         </div>
         <div class="p-4 border-t border-gray-700 text-center">

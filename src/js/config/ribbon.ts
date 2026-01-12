@@ -287,6 +287,50 @@ export const ribbonConfig: RibbonTab[] = [
     ],
   },
   {
+    id: 'draw',
+    name: 'Draw',
+    groups: [
+      {
+        name: 'Tools',
+        tools: [
+          { id: 'draw-pen', name: 'Pen', icon: 'pen', tooltip: 'Freehand drawing' },
+          { id: 'draw-highlight', name: 'Highlight', icon: 'highlighter', tooltip: 'Highlight text' },
+           { id: 'draw-rect', name: 'Rectangle', icon: 'box-select', tooltip: 'Draw rectangle' },
+           { id: 'draw-circle', name: 'Circle', icon: 'circle', tooltip: 'Draw circle' },
+          { id: 'draw-eraser', name: 'Eraser', icon: 'eraser', tooltip: 'Click to erase' },
+        ],
+      },
+      {
+        name: 'Style',
+        tools: [
+          { id: 'draw-color', name: 'Color', icon: 'palette', tooltip: 'Change Color' },
+          // Simple color picker toggle?
+        ],
+      }
+    ],
+  },
+  {
+    id: 'ai-tools',
+    name: 'AI Tools',
+    groups: [
+      {
+        name: 'Analysis',
+        tools: [
+          { id: 'ai-panel-toggle', name: 'AI Assistant', icon: 'sparkles', tooltip: 'Open AI Assistant Panel' },
+          { id: 'ai-ocr', name: 'OCR', icon: 'scan-text', tooltip: 'Extract text from current page' },
+          { id: 'ai-translate', name: 'Translate', icon: 'languages', tooltip: 'Translate document' },
+          { id: 'ai-summarize', name: 'Summarize', icon: 'file-text', tooltip: 'Summarize content' },
+        ],
+      },
+      {
+        name: 'Batch',
+        tools: [
+          { id: 'ai-batch', name: 'Batch Process', icon: 'layers', tooltip: 'Process multiple pages' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'tools',
     name: 'Tools',
     groups: [
