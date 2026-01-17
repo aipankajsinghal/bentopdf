@@ -87,7 +87,7 @@ export class AIPanel {
     this.actionButtons = this.container.querySelector('#ai-result-actions') as HTMLElement;
 
     this.initListeners();
-    createIcons({ icons, nameAttr: 'data-lucide', attrs: { class: "w-4 h-4" } }, this.container);
+    createIcons({ icons, nameAttr: 'data-lucide', attrs: { class: "w-4 h-4" } });
   }
 
   private initListeners() {
@@ -134,44 +134,32 @@ export class AIPanel {
     return canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; // Return base64 content
   }
 
-  private async handleSummarize() {
+  private async handleSummarize(text?: string) {
       if (!aiClient.hasKey()) {
           showAlert('API Key Missing', 'Please configure your Gemini API Key in Settings.');
           return;
       }
-      
-      showLoader('Analyzing page...');
+
+      let textToSummarize = text;
+
+      if (!textToSummarize) {
+          // Get text from current page via OCR
+          showLoader('Analyzing page...');
+          try {
+              const image = await this.getImageFromCurrentPage();
+              textToSummarize = await aiClient.ocrImage(image);
+          } catch (err: any) {
+              hideLoader();
+              showAlert('Error', err.message);
+              return;
+          }
+      } else {
+          this.resultArea.value = 'Summarizing selected text...';
+      }
+
+      showLoader('Summarizing...');
       try {
-          // Ideally we extract text first, but vision is more robust for complex layouts
-          // For now, let's try vision-based summary if we can get the image
-          const image = await this.getImageFromCurrentPage();
-          const summary = await aiClient.ocrImage(image); // This is just OCR, let's ask for summary
-          
-          // Re-purpose the OCR method to ask for summary? 
-          // Our ai-client is rigid. Let's fix that or use a specific prompt.
-          // Let's rely on extracted text for now if possible? 
-          // Actually, let's just use the `summarize` method but we need text first.
-          
-          // Better: Use `generateVisionContent` via adapter directly? No, keep abstraction.
-          // Let's assume we extract text via OCR first for simplicity in Phase 1
-          
-          // For a good summary, we need text. Let's get text from PDF.js first?
-          // That's complex. Let's use the Vision capability for "Summarize this image"
-          // We need to update AIClient to support vision summary
-          
-          // Temporary workaround: Use OCR image prompt
-          const prompt = "Summarize the content of this page effectively.";
-          // Access adapter directly (hack) or extend client? Let's extend Client later.
-          // For now, let's use the OCR method which is "Image -> Text" 
-          // We'll update the prompt in the client call if possible.
-          
-          // Let's assume aiClient has a generic "runVision(prompt, image)" method?
-          // It doesn't. 
-          
-          // Let's just run OCR then Summarize text.
-          const text = await aiClient.ocrImage(image);
-          const result = await aiClient.summarize(text);
-          
+          const result = await aiClient.summarize(textToSummarize);
           this.resultArea.value = result;
       } catch (err: any) {
           showAlert('Error', err.message);
@@ -198,17 +186,17 @@ export class AIPanel {
       }
   }
 
-  private async handleTranslate() {
+  private async handleTranslate(text?: string, targetLang?: string) {
       if (!aiClient.hasKey()) {
           showAlert('API Key Missing', 'Please configure your Gemini API Key in Settings.');
           return;
       }
 
-      const lang = this.languageSelect.value;
-      
+      const lang = targetLang || this.languageSelect.value;
+
       // Check if we have text in the result area to translate
-      let textToTranslate = this.resultArea.value;
-      
+      let textToTranslate = text || this.resultArea.value;
+
       if (!textToTranslate) {
           // If empty, OCR first
           if (confirm("No text to translate. Run OCR on current page first?")) {
@@ -225,6 +213,8 @@ export class AIPanel {
           } else {
               return;
           }
+      } else if (text) {
+          this.resultArea.value = `Translating selection to ${lang}...`;
       }
 
       showLoader(`Translating to ${lang}...`);
@@ -247,52 +237,9 @@ export class AIPanel {
 
   public async runTranslateText(text: string) {
       if (!text) return;
-      this.toggle(true); 
-      // Focus translate view
-      const transSection = this.panel.querySelector('.border-t') as HTMLElement;
-      if (transSection) transSection.scrollIntoView();
-      
-      const langSelect = this.panel.querySelector('select');
-      const targetLang = langSelect ? langSelect.value : 'Hindi'; // Default?
-      
+      this.toggle(true);
+      const targetLang = this.languageSelect.value || 'Hindi';
       await this.handleTranslate(text, targetLang);
-  }
-
-  private async handleSummarize(text: string) {
-    // Re-use logic from btn click but with direct text
-    const resultArea = this.panel.querySelector('textarea');
-    if (resultArea) resultArea.value = 'Summarizing selected text...';
-    
-    try {
-        const stream = await aiClient.summarize(text);
-        if (resultArea && stream) {
-            resultArea.value = '';
-            for await (const chunk of stream) {
-                resultArea.value += chunk;
-                resultArea.scrollTop = resultArea.scrollHeight;
-            }
-        }
-    } catch (err) {
-        if (resultArea) resultArea.value = `Error: ${err}`;
-    }
-  }
-
-  private async handleTranslate(text: string, targetLang: string) {
-     const resultArea = this.panel.querySelector('textarea');
-     if (resultArea) resultArea.value = `Translating selection to ${targetLang}...`;
-     
-     try {
-        const stream = await aiClient.translate(text, targetLang);
-        if (resultArea && stream) {
-            resultArea.value = '';
-            for await (const chunk of stream) {
-                resultArea.value += chunk;
-                resultArea.scrollTop = resultArea.scrollHeight;
-            }
-        }
-    } catch (err) {
-        if (resultArea) resultArea.value = `Error: ${err}`;
-    }
   }
 }
 
