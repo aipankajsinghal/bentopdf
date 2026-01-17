@@ -476,10 +476,6 @@ function setupSettingsModal(): void {
       toggleThumbnails();
     });
   }
-    thumbsToggle.addEventListener('change', () => {
-      toggleThumbnails();
-    });
-  }
 
   // API Key handling
   const apiKeyInput = document.getElementById('gemini-api-key') as HTMLInputElement;
