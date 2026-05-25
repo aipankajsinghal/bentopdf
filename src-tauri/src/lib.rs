@@ -1,6 +1,6 @@
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    Manager, Emitter, WindowEvent,
+    Emitter, Manager, WindowEvent,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -161,33 +161,41 @@ pub fn run() {
                 if let WindowEvent::DragDrop(drag_drop) = event {
                     match drag_drop {
                         tauri::DragDropEvent::Drop { paths, position: _ } => {
-                            // Separate PDF files from rejected files
-                            let mut pdf_paths: Vec<String> = Vec::new();
-                            let mut rejected_paths: Vec<String> = Vec::new();
-
-                            for p in paths {
-                                if p.extension()
+                            // Partition dropped files into PDFs and everything else.
+                            // Use .iter() so `p` is `&PathBuf` with a clear lifetime —
+                            // avoids the borrow-checker ambiguity of `for p in paths`
+                            // when paths is `&Vec<PathBuf>` under match ergonomics.
+                            let is_pdf = |p: &&std::path::PathBuf| {
+                                p.extension()
                                     .map(|ext| ext.to_string_lossy().to_lowercase() == "pdf")
                                     .unwrap_or(false)
-                                {
-                                    pdf_paths.push(p.to_string_lossy().to_string());
-                                } else {
-                                    // Use file name only (not full path) for privacy in the notification
-                                    let name = p.file_name()
+                            };
+
+                            let pdf_paths: Vec<String> = paths
+                                .iter()
+                                .filter(|p| is_pdf(p))
+                                .map(|p| p.to_string_lossy().to_string())
+                                .collect();
+
+                            let rejected_names: Vec<String> = paths
+                                .iter()
+                                .filter(|p| !is_pdf(p))
+                                .map(|p| {
+                                    // Emit file name only (not full path) for privacy
+                                    p.file_name()
                                         .map(|n| n.to_string_lossy().to_string())
-                                        .unwrap_or_else(|| p.to_string_lossy().to_string());
-                                    rejected_paths.push(name);
-                                }
-                            }
+                                        .unwrap_or_else(|| p.to_string_lossy().to_string())
+                                })
+                                .collect();
 
                             if !pdf_paths.is_empty() {
                                 log::info!("Files dropped: {:?}", pdf_paths);
                                 let _ = window_clone.emit("file-drop", &pdf_paths);
                             }
 
-                            if !rejected_paths.is_empty() {
-                                log::info!("Non-PDF files rejected: {:?}", rejected_paths);
-                                let _ = window_clone.emit("file-drop-rejected", &rejected_paths);
+                            if !rejected_names.is_empty() {
+                                log::info!("Non-PDF files rejected: {:?}", rejected_names);
+                                let _ = window_clone.emit("file-drop-rejected", &rejected_names);
                             }
                         }
                         _ => {}
