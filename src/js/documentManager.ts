@@ -8,17 +8,20 @@ let updateToolStatesFn: () => void = () => {};
 let refreshViewerFn: () => void = () => {};
 let clearViewerFn: () => void = () => {};
 let resetViewerZoomFn: () => void = () => {};
+let onDocumentClosedFn: ((docId: string) => void) | null = null;
 
 export function setDocumentManagerCallbacks(
   updateToolStates: () => void,
   refreshViewer: () => void,
   clearViewer: () => void,
-  resetViewerZoom: () => void
+  resetViewerZoom: () => void,
+  onDocumentClosed?: (docId: string) => void,
 ): void {
   updateToolStatesFn = updateToolStates;
   refreshViewerFn = refreshViewer;
   clearViewerFn = clearViewer;
   resetViewerZoomFn = resetViewerZoom;
+  onDocumentClosedFn = onDocumentClosed ?? null;
 }
 
 // ============================================================================
@@ -86,44 +89,51 @@ export async function openDocument(file: File): Promise<Document> {
 
 export async function createDocumentFromBytes(bytes: Uint8Array, fileName: string): Promise<Document> {
   const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  const pdfJsDoc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
 
-  const pageCount = pdfDoc.getPageCount();
-  const pageData: PageData[] = [];
-  for (let i = 0; i < pageCount; i++) {
-    pageData.push({
-      id: `page-${tabIdCounter}-${i}`,
-      pageIndex: i,
-      rotation: 0,
-      deleted: false,
-    });
+  let pdfJsDoc: pdfjsLib.PDFDocumentProxy | undefined;
+  try {
+    pdfJsDoc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+
+    const pageCount = pdfDoc.getPageCount();
+    const pageData: PageData[] = [];
+    for (let i = 0; i < pageCount; i++) {
+      pageData.push({
+        id: `page-${tabIdCounter}-${i}`,
+        pageIndex: i,
+        rotation: 0,
+        deleted: false,
+      });
+    }
+
+    const doc: Document = {
+      id: `doc-${++tabIdCounter}`,
+      fileName,
+      pdfBytes: bytes,
+      pdfDoc,
+      pdfJsDoc,
+      pageData,
+      annotations: [],
+      undoStack: [],
+      redoStack: [],
+      isDirty: false,
+      currentPage: 1,
+    };
+
+    documents.push(doc);
+    activeDocIndex = documents.length - 1;
+
+    renderTabs();
+    updateToolStatesFn();
+    // We call refreshViewer to unhide the viewer and render thumbnails
+    refreshViewerFn();
+    // Instead of just refreshing, we reset zoom to fit the new document
+    resetViewerZoomFn();
+
+    return doc;
+  } catch (err) {
+    pdfJsDoc?.destroy();
+    throw err;
   }
-
-  const doc: Document = {
-    id: `doc-${++tabIdCounter}`,
-    fileName,
-    pdfBytes: bytes,
-    pdfDoc,
-    pdfJsDoc,
-    pageData,
-    annotations: [],
-    undoStack: [],
-    redoStack: [],
-    isDirty: false,
-    currentPage: 1,
-  };
-
-  documents.push(doc);
-  activeDocIndex = documents.length - 1;
-
-  renderTabs();
-  updateToolStatesFn();
-  // We call refreshViewer to unhide the viewer and render thumbnails
-  refreshViewerFn();
-  // Instead of just refreshing, we reset zoom to fit the new document
-  resetViewerZoomFn();
-
-  return doc;
 }
 
 export function closeDocument(docId: string): boolean {
@@ -165,6 +175,7 @@ export function forceCloseDocument(docId: string): void {
 
   const doc = documents[index];
   doc.pdfJsDoc?.destroy();
+  onDocumentClosedFn?.(doc.id);
   documents.splice(index, 1);
 
   if (documents.length === 0) {

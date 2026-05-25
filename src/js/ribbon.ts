@@ -31,6 +31,9 @@ export function registerToolHandler(
   toolId: string,
   handler: ToolHandler
 ): void {
+  if (import.meta.env.DEV && toolHandlers.has(toolId)) {
+    console.warn(`[BentoPDF] registerToolHandler: duplicate registration for tool "${toolId}" — overwriting previous handler.`);
+  }
   toolHandlers.set(toolId, handler);
 }
 

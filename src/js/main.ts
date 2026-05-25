@@ -42,9 +42,99 @@ import {
   savePdf,
   readFile,
   setDocumentFilePath,
+  clearDocumentFilePath,
   getFileName,
   showMessage,
+  setWindowTitle,
 } from './tauri-api.js';
+
+// ============================================================================
+// Recent Files  (persisted in localStorage)
+// ============================================================================
+
+const RECENT_FILES_KEY = 'bentopdf-recent-files';
+const RECENT_FILES_MAX = 8;
+
+interface RecentFile {
+  name: string;
+  path: string; // native FS path (Tauri only) or empty string (web)
+  openedAt: number; // timestamp ms
+}
+
+function getRecentFiles(): RecentFile[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_FILES_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function addRecentFile(name: string, path: string): void {
+  const list = getRecentFiles().filter(f => f.path !== path || f.name !== name);
+  list.unshift({ name, path, openedAt: Date.now() });
+  localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(list.slice(0, RECENT_FILES_MAX)));
+  renderRecentFiles();
+}
+
+function renderRecentFiles(): void {
+  const container = document.getElementById('recent-files-list');
+  if (!container) return;
+  const list = getRecentFiles();
+  const wrapper = container.closest('#recent-files-section') as HTMLElement | null;
+  if (!list.length) {
+    if (wrapper) wrapper.classList.add('hidden');
+    return;
+  }
+  if (wrapper) wrapper.classList.remove('hidden');
+  container.innerHTML = '';
+  list.forEach(f => {
+    const btn = document.createElement('button');
+    btn.className =
+      'flex items-center gap-2 w-full text-left px-3 py-1.5 rounded text-sm ' +
+      'text-gray-300 hover:bg-gray-700/60 hover:text-white transition-colors truncate';
+    btn.title = f.path || f.name;
+    btn.innerHTML =
+      `<i data-lucide="file-text" class="w-4 h-4 shrink-0 text-gray-500"></i>` +
+      `<span class="truncate">${f.name}</span>`;
+    btn.addEventListener('click', async () => {
+      if (isTauri() && f.path) {
+        // Reopen via native path
+        const { readFile: rf } = await import('./tauri-api.js');
+        const bytes = await rf(f.path);
+        if (bytes) {
+          setProcessing(true);
+          try {
+            const file = new File([new Uint8Array(bytes)], f.name, { type: 'application/pdf' });
+            const doc = await openDocument(file);
+            setDocumentFilePath(doc.id, f.path);
+            showViewerToolbar();
+            updateWindowTitle(doc.fileName);
+          } catch {
+            showAlert('Error', 'Could not reopen the file. It may have been moved or deleted.');
+          } finally {
+            setProcessing(false);
+          }
+        } else {
+          showAlert('File Not Found', `Could not find:\n${f.path}`);
+        }
+      }
+    });
+    container.appendChild(btn);
+  });
+  // Re-initialise lucide icons for the new buttons
+  createIcons({ icons });
+}
+
+// ============================================================================
+// Window Title
+// ============================================================================
+
+function updateWindowTitle(fileName?: string): void {
+  const title = fileName ? `${fileName} — BentoPDF` : 'BentoPDF';
+  document.title = title;
+  // Also update the native Tauri window title bar
+  setWindowTitle(title).catch(() => {/* non-critical */});
+}
 
 // ============================================================================
 // Drop Zone Setup
@@ -150,19 +240,20 @@ async function openFilesNative(): Promise<void> {
   setProcessing(true);
 
   try {
+    let lastDoc = null;
     for (const path of paths) {
       const bytes = await readFile(path);
       if (bytes) {
         const fileName = getFileName(path);
         const file = new File([new Uint8Array(bytes)], fileName, { type: 'application/pdf' });
         const doc = await openDocument(file);
-        // Track each document's own file path for "Save" functionality.
-        // Using per-document IDs avoids the bug where the last-opened path
-        // would overwrite earlier documents on Ctrl+S.
         setDocumentFilePath(doc.id, path);
+        addRecentFile(fileName, path);
+        lastDoc = doc;
       }
     }
     showViewerToolbar();
+    if (lastDoc) updateWindowTitle(lastDoc.fileName);
   } catch (error) {
     console.error('Error opening PDF:', error);
     showAlert('Error', 'Failed to open PDF file.');
@@ -178,6 +269,7 @@ async function handleNativeFileDrop(paths: string[]): Promise<void> {
   setProcessing(true);
 
   try {
+    let lastDoc = null;
     for (const path of paths) {
       const bytes = await readFile(path);
       if (bytes) {
@@ -185,9 +277,12 @@ async function handleNativeFileDrop(paths: string[]): Promise<void> {
         const file = new File([new Uint8Array(bytes)], fileName, { type: 'application/pdf' });
         const doc = await openDocument(file);
         setDocumentFilePath(doc.id, path);
+        addRecentFile(fileName, path);
+        lastDoc = doc;
       }
     }
     showViewerToolbar();
+    if (lastDoc) updateWindowTitle(lastDoc.fileName);
   } catch (error) {
     console.error('Error opening dropped PDF:', error);
     showAlert('Error', 'Failed to open dropped PDF file.');
@@ -562,11 +657,20 @@ function setupKeyboardShortcuts(): void {
       return;
     }
 
-    // Ctrl/Cmd + S - Download/Save
-    if (mod && e.key.toLowerCase() === 's') {
+    // Ctrl/Cmd + S - Save (native dialog in Tauri) / Download (web)
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 's') {
       e.preventDefault();
       if (getActiveDocument()) {
-        downloadActiveDocument();
+        await saveActiveDocument();
+      }
+      return;
+    }
+
+    // Ctrl/Cmd + Shift + S - Save As
+    if (mod && e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      if (getActiveDocument()) {
+        await saveAsDocument();
       }
       return;
     }
@@ -623,13 +727,27 @@ const init = async () => {
 
   // Wire up callbacks to avoid circular dependencies
   setDocumentStateCallbacks(hasAnyDocument, getActiveDocument);
-  setDocumentManagerCallbacks(updateToolStates, refreshViewer, clearViewer, async () => {
-    // Reset zoom involves async operations (fitToPage), so we wrap it
-    // But since callback is void, we just call it.
-    // Actually viewer.ts exports resetViewerZoom, so we use that.
-    // We use the statically imported resetViewerZoom
-    resetViewerZoom();
-  });
+  setDocumentManagerCallbacks(
+    // updateToolStates
+    updateToolStates,
+    // refreshViewer — also sync the window title to the now-active document
+    () => {
+      refreshViewer();
+      const activeDoc = getActiveDocument();
+      updateWindowTitle(activeDoc?.fileName);
+    },
+    // clearViewer
+    () => {
+      clearViewer();
+      updateWindowTitle();
+    },
+    // resetViewerZoom
+    () => { resetViewerZoom(); },
+    // onDocumentClosed: clean up per-doc file path tracking
+    (docId: string) => {
+      clearDocumentFilePath(docId);
+    },
+  );
 
   // Register tool handlers before ribbon init
   registerToolHandlers();
@@ -645,6 +763,9 @@ const init = async () => {
 
   // Setup drop zone
   setupDropZone();
+
+  // Populate recent files in the drop zone
+  renderRecentFiles();
 
   // Setup viewer toolbar
   setupViewerToolbar();
@@ -744,6 +865,12 @@ Delete - Delete Selected Pages`;
         showAlert('Keyboard Shortcuts', shortcuts);
       },
       onFileDrop: handleNativeFileDrop,
+      onFileDropRejected: (names: string[]) => {
+        showAlert(
+          'Unsupported Files',
+          `The following file${names.length > 1 ? 's are' : ' is'} not a PDF and ${names.length > 1 ? 'were' : 'was'} ignored:\n\n${names.join('\n')}`
+        );
+      },
     });
     console.log('BentoPDF initialized - Desktop Edition (Tauri)');
   } else {

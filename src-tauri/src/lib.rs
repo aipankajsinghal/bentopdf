@@ -161,21 +161,33 @@ pub fn run() {
                 if let WindowEvent::DragDrop(drag_drop) = event {
                     match drag_drop {
                         tauri::DragDropEvent::Drop { paths, position: _ } => {
-                            // Filter for PDF files
-                            let pdf_paths: Vec<String> = paths
-                                .iter()
-                                .filter(|p| {
-                                    p.extension()
-                                        .map(|ext| ext.to_string_lossy().to_lowercase() == "pdf")
-                                        .unwrap_or(false)
-                                })
-                                .map(|p| p.to_string_lossy().to_string())
-                                .collect();
+                            // Separate PDF files from rejected files
+                            let mut pdf_paths: Vec<String> = Vec::new();
+                            let mut rejected_paths: Vec<String> = Vec::new();
+
+                            for p in paths {
+                                if p.extension()
+                                    .map(|ext| ext.to_string_lossy().to_lowercase() == "pdf")
+                                    .unwrap_or(false)
+                                {
+                                    pdf_paths.push(p.to_string_lossy().to_string());
+                                } else {
+                                    // Use file name only (not full path) for privacy in the notification
+                                    let name = p.file_name()
+                                        .map(|n| n.to_string_lossy().to_string())
+                                        .unwrap_or_else(|| p.to_string_lossy().to_string());
+                                    rejected_paths.push(name);
+                                }
+                            }
 
                             if !pdf_paths.is_empty() {
                                 log::info!("Files dropped: {:?}", pdf_paths);
-                                // Emit event to frontend
                                 let _ = window_clone.emit("file-drop", &pdf_paths);
+                            }
+
+                            if !rejected_paths.is_empty() {
+                                log::info!("Non-PDF files rejected: {:?}", rejected_paths);
+                                let _ = window_clone.emit("file-drop-rejected", &rejected_paths);
                             }
                         }
                         _ => {}

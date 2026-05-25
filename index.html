@@ -129,7 +129,7 @@
         >
           <!-- Drop Zone (shown when no document) -->
           <div id="drop-zone" class="flex items-center justify-center p-8">
-            <div class="text-center max-w-md">
+            <div class="text-center max-w-md w-full">
               <div
                 id="drop-zone-inner"
                 class="border-2 border-dashed border-gray-600 rounded-2xl p-12 hover:border-indigo-500 hover:bg-gray-800/50 transition-all cursor-pointer"
@@ -154,6 +154,14 @@
                 <p class="text-gray-500 text-xs">
                   Open a PDF file to start editing
                 </p>
+              </div>
+
+              <!-- Recent Files — shown only when localStorage has entries -->
+              <div id="recent-files-section" class="hidden mt-6 text-left">
+                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 px-1">
+                  Recent
+                </p>
+                <div id="recent-files-list" class="space-y-0.5"></div>
               </div>
             </div>
           </div>

@@ -12,6 +12,7 @@ export function isTauri(): boolean {
 let dialogModule: typeof import('@tauri-apps/plugin-dialog') | null = null;
 let fsModule: typeof import('@tauri-apps/plugin-fs') | null = null;
 let eventModule: typeof import('@tauri-apps/api/event') | null = null;
+let windowModule: typeof import('@tauri-apps/api/window') | null = null;
 
 async function getDialogModule() {
   if (!dialogModule && isTauri()) {
@@ -32,6 +33,13 @@ async function getEventModule() {
     eventModule = await import('@tauri-apps/api/event');
   }
   return eventModule;
+}
+
+async function getWindowModule() {
+  if (!windowModule && isTauri()) {
+    windowModule = await import('@tauri-apps/api/window');
+  }
+  return windowModule;
 }
 
 /**
@@ -241,6 +249,39 @@ export async function onFileDrop(callback: (paths: string[]) => void): Promise<(
 }
 
 /**
+ * Update the native window title bar (no-op in web mode).
+ */
+export async function setWindowTitle(title: string): Promise<void> {
+  if (!isTauri()) return;
+  const win = await getWindowModule();
+  if (!win) return;
+  try {
+    const appWindow = win.getCurrentWindow();
+    await appWindow.setTitle(title);
+  } catch (e) {
+    console.warn('[BentoPDF] setWindowTitle failed:', e);
+  }
+}
+
+/**
+ * Listen for drag-drop events where no PDF files were present.
+ * The payload is an array of the rejected file names/paths.
+ */
+export async function onFileDropRejected(
+  callback: (paths: string[]) => void
+): Promise<(() => void) | null> {
+  if (!isTauri()) return null;
+  const event = await getEventModule();
+  if (!event) return null;
+  const unlisten = await event.listen<string[]>('file-drop-rejected', (e) => {
+    if (e.payload.length > 0) {
+      callback(e.payload);
+    }
+  });
+  return unlisten;
+}
+
+/**
  * Track open file paths per-document for "Save" functionality.
  * Keys are document IDs (from documentManager); values are absolute file paths.
  */
@@ -326,6 +367,7 @@ export async function initTauriIntegrations(handlers: {
   onAbout?: () => void;
   onShortcuts?: () => void;
   onFileDrop?: (paths: string[]) => void;
+  onFileDropRejected?: (paths: string[]) => void;
 }): Promise<void> {
   if (!isTauri()) return;
 
@@ -413,5 +455,10 @@ export async function initTauriIntegrations(handlers: {
   // Listen to file drop events
   if (handlers.onFileDrop) {
     await onFileDrop(handlers.onFileDrop);
+  }
+
+  // Listen to file drop rejected events
+  if (handlers.onFileDropRejected) {
+    await onFileDropRejected(handlers.onFileDropRejected);
   }
 }
