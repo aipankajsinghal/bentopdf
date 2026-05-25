@@ -186,7 +186,13 @@ export function forceCloseDocument(docId: string): void {
 export function closeActiveDocument(): void {
   const doc = getActiveDocument();
   if (!doc) return;
-  forceCloseDocument(doc.id);
+  // Show the unsaved-changes confirmation dialog (same as the tab close button)
+  // so the user isn't silently robbed of work when using the native menu or Ctrl+W.
+  if (doc.isDirty) {
+    showCloseConfirmation(doc.id);
+  } else {
+    forceCloseDocument(doc.id);
+  }
 }
 
 export function switchToDocument(docId: string): void {

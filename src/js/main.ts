@@ -41,7 +41,7 @@ import {
   openPdfDialog,
   savePdf,
   readFile,
-  setCurrentFilePath,
+  setDocumentFilePath,
   getFileName,
   showMessage,
 } from './tauri-api.js';
@@ -155,9 +155,11 @@ async function openFilesNative(): Promise<void> {
       if (bytes) {
         const fileName = getFileName(path);
         const file = new File([new Uint8Array(bytes)], fileName, { type: 'application/pdf' });
-        await openDocument(file);
-        // Track the file path for "Save" functionality
-        setCurrentFilePath(path);
+        const doc = await openDocument(file);
+        // Track each document's own file path for "Save" functionality.
+        // Using per-document IDs avoids the bug where the last-opened path
+        // would overwrite earlier documents on Ctrl+S.
+        setDocumentFilePath(doc.id, path);
       }
     }
     showViewerToolbar();
@@ -181,8 +183,8 @@ async function handleNativeFileDrop(paths: string[]): Promise<void> {
       if (bytes) {
         const fileName = getFileName(path);
         const file = new File([new Uint8Array(bytes)], fileName, { type: 'application/pdf' });
-        await openDocument(file);
-        setCurrentFilePath(path);
+        const doc = await openDocument(file);
+        setDocumentFilePath(doc.id, path);
       }
     }
     showViewerToolbar();
@@ -202,7 +204,7 @@ async function saveActiveDocument(): Promise<void> {
   if (!doc) return;
 
   if (isTauri()) {
-    const result = await savePdf(doc.pdfBytes, doc.fileName, false);
+    const result = await savePdf(doc.pdfBytes, doc.fileName, false, doc.id);
     if (result.success && result.path) {
       await showMessage('Saved', `File saved to:\n${result.path}`, 'info');
     }
@@ -220,7 +222,7 @@ async function saveAsDocument(): Promise<void> {
   if (!doc) return;
 
   if (isTauri()) {
-    const result = await savePdf(doc.pdfBytes, doc.fileName, true);
+    const result = await savePdf(doc.pdfBytes, doc.fileName, true, doc.id);
     if (result.success && result.path) {
       await showMessage('Saved', `File saved to:\n${result.path}`, 'info');
     }
@@ -299,10 +301,6 @@ function registerToolHandlers(): void {
   // Zoom controls
   registerToolHandler('zoom-in', zoomIn);
   registerToolHandler('zoom-out', zoomOut);
-  registerToolHandler('fit-page', fitToPage);
-
-  registerToolHandler('fit-page', fitToPage);
-
   registerToolHandler('fit-page', fitToPage);
 
   // Drawing Tools
@@ -557,11 +555,10 @@ function setupKeyboardShortcuts(): void {
     const isMac = navigator.userAgent.toUpperCase().includes('MAC');
     const mod = isMac ? e.metaKey : e.ctrlKey;
 
-    // Ctrl/Cmd + O - Open file
+    // Ctrl/Cmd + O - Open file (native dialog in Tauri, browser picker elsewhere)
     if (mod && e.key.toLowerCase() === 'o') {
       e.preventDefault();
-      const fileInput = document.getElementById('file-input') as HTMLInputElement;
-      fileInput?.click();
+      await openFilesNative();
       return;
     }
 
@@ -657,9 +654,6 @@ const init = async () => {
 
   // Setup alert modal
   setupAlertModal();
-
-  // Setup keyboard shortcuts
-  setupKeyboardShortcuts();
 
   // Setup keyboard shortcuts
   setupKeyboardShortcuts();

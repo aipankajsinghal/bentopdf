@@ -228,47 +228,47 @@ export async function onFileDrop(callback: (paths: string[]) => void): Promise<(
   const event = await getEventModule();
   if (!event) return null;
 
-  // Listen to native Tauri drag-drop event
-  const unlisten1 = await event.listen<{ paths: string[] }>('tauri://drag-drop', (e) => {
-    // Filter for PDF files
-    const pdfPaths = e.payload.paths.filter(p => p.toLowerCase().endsWith('.pdf'));
-    if (pdfPaths.length > 0) {
-      callback(pdfPaths);
-    }
-  });
-
-  // Also listen to custom file-drop event from Rust backend
-  const unlisten2 = await event.listen<string[]>('file-drop', (e) => {
-    // Already filtered for PDF in Rust
+  // In Tauri v2 the framework does not auto-emit 'tauri://drag-drop' to JS.
+  // The Rust backend (lib.rs) handles WindowEvent::DragDrop and emits the
+  // custom 'file-drop' event with paths already filtered to PDFs.
+  const unlisten = await event.listen<string[]>('file-drop', (e) => {
     if (e.payload.length > 0) {
       callback(e.payload);
     }
   });
 
-  // Return combined unlisten function
-  return () => {
-    unlisten1();
-    unlisten2();
-  };
+  return unlisten;
 }
 
 /**
- * Track open file path for "Save" functionality
+ * Track open file paths per-document for "Save" functionality.
+ * Keys are document IDs (from documentManager); values are absolute file paths.
  */
-let currentFilePath: string | null = null;
+const filePathsByDocId: Map<string, string> = new Map();
 
-export function setCurrentFilePath(path: string | null): void {
-  currentFilePath = path;
+export function setDocumentFilePath(docId: string, path: string): void {
+  filePathsByDocId.set(docId, path);
 }
 
-export function getCurrentFilePath(): string | null {
-  return currentFilePath;
+export function getDocumentFilePath(docId: string): string | null {
+  return filePathsByDocId.get(docId) ?? null;
+}
+
+export function clearDocumentFilePath(docId: string): void {
+  filePathsByDocId.delete(docId);
 }
 
 /**
- * Save PDF - either to current path or show save dialog
+ * Save PDF - either to the document's known path or show a save dialog.
+ * Pass `docId` so the correct per-document path is used; after a successful
+ * save the resolved path is recorded back against that document ID.
  */
-export async function savePdf(pdfBytes: Uint8Array, fileName: string, forceDialog: boolean = false): Promise<{ success: boolean; path?: string }> {
+export async function savePdf(
+  pdfBytes: Uint8Array,
+  fileName: string,
+  forceDialog: boolean = false,
+  docId?: string,
+): Promise<{ success: boolean; path?: string }> {
   if (!isTauri()) {
     // Fallback to browser download
     return { success: false };
@@ -276,9 +276,10 @@ export async function savePdf(pdfBytes: Uint8Array, fileName: string, forceDialo
 
   let savePath: string | null = null;
 
-  if (!forceDialog && currentFilePath) {
-    // Save to existing path
-    savePath = currentFilePath;
+  const knownPath = docId ? getDocumentFilePath(docId) : null;
+  if (!forceDialog && knownPath) {
+    // Save to the path this document was opened from / last saved to
+    savePath = knownPath;
   } else {
     // Show save dialog
     savePath = await savePdfDialog(fileName);
@@ -290,8 +291,8 @@ export async function savePdf(pdfBytes: Uint8Array, fileName: string, forceDialo
 
   const success = await writeFile(savePath, pdfBytes);
 
-  if (success) {
-    setCurrentFilePath(savePath);
+  if (success && docId) {
+    setDocumentFilePath(docId, savePath);
   }
 
   return { success, path: savePath };

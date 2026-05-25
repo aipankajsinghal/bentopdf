@@ -365,11 +365,22 @@ export function initViewer(): void {
 
     switch (e.key) {
       case 'ArrowLeft':
+        // Ctrl/Cmd+Left is reserved for the native "Rotate Left" menu shortcut;
+        // only navigate when no modifier is held.
+        if (e.ctrlKey || e.metaKey) break;
+        e.preventDefault();
+        await prevPage();
+        break;
       case 'PageUp':
         e.preventDefault();
         await prevPage();
         break;
       case 'ArrowRight':
+        // Ctrl/Cmd+Right is reserved for the native "Rotate Right" menu shortcut.
+        if (e.ctrlKey || e.metaKey) break;
+        e.preventDefault();
+        await nextPage();
+        break;
       case 'PageDown':
         e.preventDefault();
         await nextPage();
