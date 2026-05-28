@@ -104,6 +104,8 @@ async function renderCurrentPage(doc: Document): Promise<void> {
     }
 
     // Render Text Layer
+    // Note: Text layer rendering is commented out for now due to PDF.js v5 API changes
+    // TODO: Re-enable text layer rendering with proper PDF.js v5 API
     if (textLayerDiv) {
         textLayerDiv.innerHTML = ''; // Clear previous
         // Ensure absolute positioning match

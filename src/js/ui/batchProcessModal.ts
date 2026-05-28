@@ -246,7 +246,7 @@ class BatchProcessModal {
              canvas.width = viewport.width;
 
              if (context) {
-                await page.render({ canvasContext: context, viewport: viewport, canvas }).promise;
+                await page.render({ canvasContext: context, viewport: viewport, canvas: canvas } as any).promise;
                 const imageBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
                 
                 // AI Call

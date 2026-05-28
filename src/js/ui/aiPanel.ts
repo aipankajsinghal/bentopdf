@@ -86,6 +86,7 @@ export class AIPanel {
     this.languageSelect = this.container.querySelector('#ai-language-select') as HTMLSelectElement;
 
     this.initListeners();
+    createIcons({ icons, nameAttr: 'data-lucide', attrs: { class: "w-4 h-4" } });
   }
 
   private initListeners() {
@@ -134,22 +135,32 @@ export class AIPanel {
     return canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
   }
 
-  private async handleSummarize(textOverride?: string) {
+  private async handleSummarize(text?: string) {
     if (!aiClient.hasKey()) {
       showAlert('API Key Missing', 'Please configure your Gemini API Key in Settings.');
       return;
     }
 
-    showLoader('Analyzing page...');
-    try {
-      let result: string;
-      if (textOverride) {
-        result = await aiClient.summarize(textOverride);
-      } else {
+    let textToSummarize = text;
+
+    if (!textToSummarize) {
+      // Get text from current page via OCR
+      showLoader('Analyzing page...');
+      try {
         const image = await this.getImageFromCurrentPage();
-        const text = await aiClient.ocrImage(image);
-        result = await aiClient.summarize(text);
+        textToSummarize = await aiClient.ocrImage(image);
+      } catch (err: any) {
+        hideLoader();
+        showAlert('Error', err.message);
+        return;
       }
+    } else {
+      this.resultArea.value = 'Summarizing selected text...';
+    }
+
+    showLoader('Summarizing...');
+    try {
+      const result = await aiClient.summarize(textToSummarize);
       this.resultArea.value = result;
     } catch (err: any) {
       showAlert('Error', err.message);
@@ -176,23 +187,26 @@ export class AIPanel {
     }
   }
 
-  private async handleTranslate(textOverride?: string) {
+  private async handleTranslate(text?: string, targetLang?: string) {
     if (!aiClient.hasKey()) {
       showAlert('API Key Missing', 'Please configure your Gemini API Key in Settings.');
       return;
     }
 
-    const lang = this.languageSelect.value;
-    let textToTranslate = textOverride || this.resultArea.value;
+    const lang = targetLang || this.languageSelect.value;
+
+    // Check if we have text in the result area to translate
+    let textToTranslate = text || this.resultArea.value;
 
     if (!textToTranslate) {
-      if (confirm('No text to translate. Run OCR on current page first?')) {
+      // If empty, OCR first
+      if (confirm("No text to translate. Run OCR on current page first?")) {
         showLoader('Extracting text...');
         try {
           const image = await this.getImageFromCurrentPage();
           textToTranslate = await aiClient.ocrImage(image);
-          this.resultArea.value = textToTranslate;
-        } catch (e: any) {
+          this.resultArea.value = textToTranslate; // Show intermediate
+        } catch(e: any) {
           hideLoader();
           showAlert('Error', e.message);
           return;
@@ -200,6 +214,8 @@ export class AIPanel {
       } else {
         return;
       }
+    } else if (text) {
+      this.resultArea.value = `Translating selection to ${lang}...`;
     }
 
     showLoader(`Translating to ${lang}...`);
@@ -223,7 +239,8 @@ export class AIPanel {
   public async runTranslateText(text: string) {
     if (!text) return;
     this.toggle(true);
-    await this.handleTranslate(text);
+    const targetLang = this.languageSelect.value || 'Hindi';
+    await this.handleTranslate(text, targetLang);
   }
 }
 

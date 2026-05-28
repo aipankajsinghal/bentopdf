@@ -790,4 +790,11 @@ Delete - Delete Selected Pages`;
   createIcons({ icons });
 };
 
-window.addEventListener('load', init);
+// Check if document is already loaded (common on Windows after installation)
+// or add listener for when it loads (web and early-loading scenarios)
+if (document.readyState === 'loading') {
+  window.addEventListener('load', init);
+} else {
+  // Document is already loaded (DOM is ready or complete)
+  init();
+}

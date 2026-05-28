@@ -42,8 +42,11 @@ export class AnnotationLayer {
     private hoveredElement: SVGElement | null = null;
 
     constructor() {
-        this.svg = document.getElementById('annotation-layer') as unknown as SVGSVGElement;
-        this.initListeners();
+        const el = document.getElementById('annotation-layer');
+        this.svg = el as unknown as SVGSVGElement;
+        if (el) {
+            this.initListeners();
+        }
     }
 
     setTool(tool: ToolType) {
