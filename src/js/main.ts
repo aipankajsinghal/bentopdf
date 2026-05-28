@@ -266,6 +266,9 @@ function setupViewerToolbar(): void {
 function registerToolHandlers(): void {
   // File operations - use native dialog in Tauri
   registerToolHandler('open-file', openFilesNative);
+  registerToolHandler('save', saveActiveDocument);
+  registerToolHandler('save-as', saveAsDocument);
+  registerToolHandler('close-doc', closeActiveDocument);
 
   registerToolHandler('download', downloadActiveDocument);
   registerToolHandler('add-pdf', () => {
@@ -294,6 +297,19 @@ function registerToolHandlers(): void {
 
   registerToolHandler('redo', async () => {
     await redo();
+  });
+
+  // Selection
+  registerToolHandler('select-all', () => {
+    const doc = getActiveDocument();
+    if (doc && typeof selectAllPages === 'function') {
+      selectAllPages(doc.pageData?.length || 1);
+    }
+  });
+  registerToolHandler('deselect', () => {
+    if (typeof clearPageSelection === 'function') {
+      clearPageSelection();
+    }
   });
 
   // Zoom controls
