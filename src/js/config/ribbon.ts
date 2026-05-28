@@ -183,7 +183,7 @@ export const ribbonConfig: RibbonTab[] = [
               { id: 'rotate-left', name: 'Rotate Left', icon: 'rotate-ccw', tooltip: 'Rotate 90° left' },
               { id: 'rotate-right', name: 'Rotate Right', icon: 'rotate-cw', tooltip: 'Rotate 90° right' },
               { id: 'rotate-180', name: 'Rotate 180°', icon: 'refresh-cw', tooltip: 'Rotate 180°' },
-              { id: 'rotate-custom', name: 'Custom Angle', icon: 'compass', tooltip: 'Rotate by custom angle' },
+              { id: 'rotate-custom', name: 'Custom Angle', icon: 'compass', tooltip: 'Rotate by arbitrary angle (e.g. 45°, -30°)' },
               { id: 'reverse-pages', name: 'Reverse Order', icon: 'arrow-down-z-a', tooltip: 'Reverse page order' },
             ],
           },

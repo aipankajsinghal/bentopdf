@@ -1,6 +1,5 @@
 import { PDFDocument, RotationTypes, StandardFonts, rgb, degrees, PDFName, PDFDict, PDFArray, PDFNumber, PDFString } from 'pdf-lib';
 import JSZip from 'jszip';
-import { jsPDF } from 'jspdf';
 import { pdfjsLib } from './utils/pdfjs-init.js';
 import { Document as DocxDocument, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { showWatermarkModal, showStampModal, showSignModal } from './ui/editorModals.js';
@@ -1134,7 +1133,7 @@ export async function pdfToTxt(): Promise<void> {
   for (const pageNum of pageNums) {
     const page = await doc.pdfJsDoc.getPage(pageNum);
     const content = await page.getTextContent();
-    const text = (content.items as any[]).map(item => item.str).join(' ');
+    const text = (content.items as any[]).filter(item => typeof item.str === 'string').map(item => item.str).join(' ');
     pageTexts.push(`--- Page ${pageNum} ---\n${text}`);
   }
 
@@ -1171,7 +1170,7 @@ export async function pdfToDocx(): Promise<void> {
     );
     const page = await doc.pdfJsDoc.getPage(pageNum);
     const content = await page.getTextContent();
-    const text = (content.items as any[]).map(item => item.str).join(' ');
+    const text = (content.items as any[]).filter(item => typeof item.str === 'string').map(item => item.str).join(' ');
     children.push(new Paragraph({ children: [new TextRun(text)] }));
   }
 
@@ -1210,10 +1209,9 @@ export async function alternateMerge(): Promise<void> {
   const bBytes = new Uint8Array(await file.arrayBuffer());
   const bDoc = await PDFDocument.load(bBytes, { ignoreEncryption: true });
 
-  const aPages = await aDoc.copyPages(aDoc, aDoc.getPageIndices());
-  const bPages = await bDoc.copyPages(bDoc, bDoc.getPageIndices());
-
   const merged = await PDFDocument.create();
+  const aPages = await merged.copyPages(aDoc, aDoc.getPageIndices());
+  const bPages = await merged.copyPages(bDoc, bDoc.getPageIndices());
   const maxLen = Math.max(aPages.length, bPages.length);
   for (let i = 0; i < maxLen; i++) {
     if (i < aPages.length) merged.addPage(aPages[i]);
@@ -1330,16 +1328,12 @@ export async function rotateCustom(): Promise<void> {
   const selected = getSelectedPages();
   const targets  = selected.length ? selected : [Math.max(0, doc.currentPage - 1)];
 
-  // PDF rotation must be a multiple of 90; for arbitrary angles use page.setRotation with degrees()
-  // pdf-lib only supports multiples of 90 in setRotation, so we normalize to nearest 90
-  // For true arbitrary rotation we draw on a transformed page — keep it to 90-step snapping for now
-  const snapped = Math.round(angle / 90) * 90;
   targets.forEach(i => {
     if (i < 0 || i >= pdfDoc.getPageCount()) return;
     const p    = pdfDoc.getPage(i);
     const base = p.getRotation().angle;
-    const next = ((base + snapped) % 360 + 360) % 360;
-    p.setRotation({ type: RotationTypes.Degrees, angle: next });
+    const next = ((base + angle) % 360 + 360) % 360;
+    p.setRotation(degrees(next));
   });
 
   await savePdfDocToActive(doc, pdfDoc);
@@ -1371,7 +1365,7 @@ export async function bundleToZip(): Promise<void> {
   a.href     = url;
   a.download = `nexuspdf-bundle-${Date.now()}.zip`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
 // ============================================================================
@@ -1416,9 +1410,16 @@ export async function pdfOverlay(): Promise<void> {
   const stampDoc = await PDFDocument.load(stampBytes, { ignoreEncryption: true });
   const stampPageCount = stampDoc.getPageCount();
 
+  // Embed stamp pages and (for underlay) original pages once, outside the loop
+  const stampIndices = Array.from({ length: stampPageCount }, (_, idx) => idx);
+  const embeddedStampPages = await pdfDoc.embedPdf(stampBytes, stampIndices);
+
+  const origIndices = Array.from({ length: pdfDoc.getPageCount() }, (_, idx) => idx);
+  const embeddedOrigPages = mode === 'underlay' ? await pdfDoc.embedPdf(doc.pdfBytes, origIndices) : [];
+
   for (let i = 0; i < pdfDoc.getPageCount(); i++) {
     const stampIdx = i % stampPageCount;
-    const [embedded] = await pdfDoc.embedPdf(stampBytes, [stampIdx]);
+    const embedded = embeddedStampPages[stampIdx];
     const page = pdfDoc.getPage(i);
     const { width, height } = page.getSize();
     const drawOpts = { x: 0, y: 0, width, height, opacity: 0.6 };
@@ -1427,7 +1428,7 @@ export async function pdfOverlay(): Promise<void> {
     } else {
       // Underlay: draw stamp first, then re-embed original page content on top
       // pdf-lib can't reorder existing content, so we create a new page with stamp then original
-      const [origEmbedded] = await pdfDoc.embedPdf(doc.pdfBytes, [i]);
+      const origEmbedded = embeddedOrigPages[i];
       const blank = pdfDoc.insertPage(i + 1, [width, height]);
       blank.drawPage(embedded, { x: 0, y: 0, width, height, opacity: 0.6 });
       blank.drawPage(origEmbedded, { x: 0, y: 0, width, height });
@@ -1492,6 +1493,13 @@ export async function extractImages(): Promise<void> {
             idat.data[k] = src[j]; idat.data[k+1] = src[j+1];
             idat.data[k+2] = src[j+2]; idat.data[k+3] = 255;
           }
+        } else if (kind === 1) {
+          // Grayscale → RGBA
+          for (let j = 0, k = 0; j < src.length; j++, k += 4) {
+            const g = src[j];
+            idat.data[k] = g; idat.data[k+1] = g;
+            idat.data[k+2] = g; idat.data[k+3] = 255;
+          }
         } else {
           idat.data.set(src.length === idat.data.length ? src : src.subarray(0, idat.data.length));
         }
@@ -1546,8 +1554,8 @@ export async function pdfBooklet(): Promise<void> {
 
   // Embed all source pages once
   const paddedBytes = await srcDoc.save();
-  const allPages    = await (await PDFDocument.create()).embedPdf(paddedBytes, srcDoc.getPageIndices());
   const bookletDoc  = await PDFDocument.create();
+  const allPages    = await bookletDoc.embedPdf(paddedBytes, srcDoc.getPageIndices());
 
   // Use first page size (portrait); sheet is 2× wide (landscape)
   const firstSrc  = srcDoc.getPage(0);
@@ -1873,11 +1881,12 @@ export async function deskewPdf(): Promise<void> {
   const newDoc = await PDFDocument.create();
   const srcPages = srcDoc.getPages();
   const totalPages = srcPages.length;
+  const pageSet = new Set(pageIndices);
 
   let correctedCount = 0;
 
   for (let i = 0; i < totalPages; i++) {
-    if (!pageIndices.includes(i)) {
+    if (!pageSet.has(i)) {
       // Keep page as-is
       const [copied] = await newDoc.copyPages(srcDoc, [i]);
       newDoc.addPage(copied);
@@ -1937,9 +1946,10 @@ export async function deskewPdf(): Promise<void> {
     rotCtx.restore();
 
     // --- Step 4: embed rotated image into a new page ---
-    const jpegBytes = await new Promise<Uint8Array>((resolve) => {
+    const jpegBytes = await new Promise<Uint8Array>((resolve, reject) => {
       rotCanvas.toBlob(blob => {
-        blob!.arrayBuffer().then(ab => resolve(new Uint8Array(ab)));
+        if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
+        blob.arrayBuffer().then(ab => resolve(new Uint8Array(ab)));
       }, 'image/jpeg', 0.92);
     });
     const embedded = await newDoc.embedJpg(jpegBytes);

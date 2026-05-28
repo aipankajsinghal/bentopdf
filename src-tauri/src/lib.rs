@@ -25,9 +25,9 @@ async fn ai_set_key(key: String, state: State<'_, ApiKeyState>, app: AppHandle) 
         *lock = if key.is_empty() { None } else { Some(key.clone()) };
     }
     if let Ok(config_dir) = app.path().app_config_dir() {
-        let _ = std::fs::create_dir_all(&config_dir);
+        std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
         let content = serde_json::json!({ "gemini_key": key }).to_string();
-        let _ = std::fs::write(config_dir.join("ai_config.json"), content);
+        std::fs::write(config_dir.join("ai_config.json"), content).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
