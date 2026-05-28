@@ -30,6 +30,18 @@ export const ribbonConfig: RibbonTab[] = [
         name: 'File',
         tools: [
           { id: 'open-file', name: 'Open', icon: 'folder-open', tooltip: 'Open PDF file' },
+          {
+            id: 'save-group',
+            name: 'Save',
+            icon: 'save',
+            type: 'dropdown',
+            tooltip: 'Save document',
+            children: [
+              { id: 'save', name: 'Save', icon: 'save', tooltip: 'Save to current path (Ctrl+S)' },
+              { id: 'save-as', name: 'Save As', icon: 'save-all', tooltip: 'Save to new location (Ctrl+Shift+S)' },
+              { id: 'close-doc', name: 'Close', icon: 'file-x', tooltip: 'Close active document (Ctrl+W)' },
+            ],
+          },
           { id: 'download', name: 'Download', icon: 'download', tooltip: 'Download PDF' },
         ],
       },
