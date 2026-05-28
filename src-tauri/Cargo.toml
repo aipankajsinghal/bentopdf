@@ -1,8 +1,8 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "BentoPDF - PDF Toolkit"
-authors = ["BentoPDF Team"]
+description = "NexusPDF - AI-Powered PDF Toolkit"
+authors = ["NexusPDF Team"]
 license = "MIT"
 repository = "https://github.com/aipankajsinghal/bentopdf"
 edition = "2021"
@@ -26,3 +26,4 @@ tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-window-state = "2"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }

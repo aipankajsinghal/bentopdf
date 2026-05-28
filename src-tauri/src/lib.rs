@@ -1,15 +1,105 @@
+use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    Manager, Emitter, WindowEvent,
+    AppHandle, Manager, Emitter, State, WindowEvent,
 };
+
+// ── AI key state ─────────────────────────────────────────────────────────────
+
+struct ApiKeyState(Mutex<Option<String>>);
+
+fn gemini_url(key: &str) -> String {
+    format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}",
+        key
+    )
+}
+
+#[tauri::command]
+async fn ai_set_key(key: String, state: State<'_, ApiKeyState>, app: AppHandle) -> Result<(), String> {
+    {
+        let mut lock = state.0.lock().map_err(|e| e.to_string())?;
+        *lock = if key.is_empty() { None } else { Some(key.clone()) };
+    }
+    if let Ok(config_dir) = app.path().app_config_dir() {
+        let _ = std::fs::create_dir_all(&config_dir);
+        let content = serde_json::json!({ "gemini_key": key }).to_string();
+        let _ = std::fs::write(config_dir.join("ai_config.json"), content);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn ai_has_key(state: State<'_, ApiKeyState>) -> bool {
+    state.0.lock().map(|l| l.is_some()).unwrap_or(false)
+}
+
+#[tauri::command]
+async fn ai_generate_text(prompt: String, state: State<'_, ApiKeyState>) -> Result<String, String> {
+    let key = state.0.lock().map_err(|e| e.to_string())?.clone()
+        .ok_or_else(|| "Gemini API key not configured".to_string())?;
+    let body = serde_json::json!({ "contents": [{ "parts": [{ "text": prompt }] }] });
+    let client = reqwest::Client::new();
+    let resp = client.post(gemini_url(&key)).json(&body).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        let err: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+        return Err(err["error"]["message"].as_str().unwrap_or("Gemini API error").to_string());
+    }
+    let data: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(data["candidates"][0]["content"]["parts"][0]["text"].as_str().unwrap_or("").to_string())
+}
+
+#[tauri::command]
+async fn ai_generate_vision(prompt: String, image_base64: String, state: State<'_, ApiKeyState>) -> Result<String, String> {
+    let key = state.0.lock().map_err(|e| e.to_string())?.clone()
+        .ok_or_else(|| "Gemini API key not configured".to_string())?;
+    let body = serde_json::json!({
+        "contents": [{ "parts": [
+            { "text": prompt },
+            { "inline_data": { "mime_type": "image/jpeg", "data": image_base64 } }
+        ]}]
+    });
+    let client = reqwest::Client::new();
+    let resp = client.post(gemini_url(&key)).json(&body).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        let err: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+        return Err(err["error"]["message"].as_str().unwrap_or("Gemini API error").to_string());
+    }
+    let data: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(data["candidates"][0]["content"]["parts"][0]["text"].as_str().unwrap_or("").to_string())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(ApiKeyState(Mutex::new(None)))
+        .invoke_handler(tauri::generate_handler![
+            ai_set_key,
+            ai_has_key,
+            ai_generate_text,
+            ai_generate_vision,
+        ])
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .setup(|app| {
+            // Load persisted Gemini API key
+            if let Ok(config_dir) = app.path().app_config_dir() {
+                let config_file = config_dir.join("ai_config.json");
+                if let Ok(content) = std::fs::read_to_string(config_file) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(key) = json["gemini_key"].as_str() {
+                            if !key.is_empty() {
+                                let state = app.state::<ApiKeyState>();
+                                *state.0.lock().unwrap() = Some(key.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
             // Setup logging in debug mode
             if cfg!(debug_assertions) {
                 app.handle().plugin(

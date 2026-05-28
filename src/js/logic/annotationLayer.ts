@@ -42,7 +42,7 @@ export class AnnotationLayer {
     private hoveredElement: SVGElement | null = null;
 
     constructor() {
-        this.svg = document.getElementById('annotation-layer') as SVGSVGElement;
+        this.svg = document.getElementById('annotation-layer') as unknown as SVGSVGElement;
         this.initListeners();
     }
 

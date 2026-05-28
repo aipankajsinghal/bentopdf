@@ -113,12 +113,18 @@ async function renderCurrentPage(doc: Document): Promise<void> {
         textLayerDiv.style.setProperty('--scale-factor', String(currentZoom));
 
         const textContent = await page.getTextContent();
-        pdfjsLib.renderTextLayer({
-            textContent,
+        // Detect RTL content (Arabic / Hebrew) for correct text direction
+        const hasRTL = textContent.items.some((item: any) =>
+            item.str && /[؀-ۿ֐-׿]/.test(item.str)
+        );
+        textLayerDiv.dir = hasRTL ? 'rtl' : 'ltr';
+
+        const textLayer = new pdfjsLib.TextLayer({
+            textContentSource: textContent,
             container: textLayerDiv,
             viewport,
-            textDivs: []
         });
+        await textLayer.render();
     }
 
   } catch (error) {

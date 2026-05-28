@@ -399,7 +399,21 @@ function registerToolHandlers(): void {
     'pdf-to-bmp': 'PDF to BMP',
     'pdf-to-tiff': 'PDF to TIFF',
     'pdf-to-json': 'PDF to JSON',
+    'pdf-to-txt': 'PDF to TXT',
+    'pdf-to-docx': 'PDF to DOCX',
     'ocr': 'OCR',
+    'alternate-merge': 'Alternate Merge',
+    'add-page-labels': 'Add Page Labels',
+    'bates-numbering': 'Bates Numbering',
+    'rotate-custom': 'Custom Rotation',
+    'bundle-to-zip': 'Bundle to ZIP',
+    'pdf-overlay': 'PDF Overlay',
+    'extract-images': 'Extract Images',
+    'pdf-booklet': 'PDF Booklet',
+    'scanner-effect': 'Scanner Effect',
+    'markdown-to-pdf': 'Markdown to PDF',
+    'pdf-to-svg': 'PDF to SVG',
+    'deskew-pdf': 'Deskew PDF',
     'encrypt': 'Encrypt',
     'decrypt': 'Decrypt',
     'permissions': 'Permissions',
@@ -476,10 +490,6 @@ function setupSettingsModal(): void {
       toggleThumbnails();
     });
   }
-    thumbsToggle.addEventListener('change', () => {
-      toggleThumbnails();
-    });
-  }
 
   // API Key handling
   const apiKeyInput = document.getElementById('gemini-api-key') as HTMLInputElement;
@@ -492,10 +502,10 @@ function setupSettingsModal(): void {
       apiKeyInput.value = aiClient.getApiKey();
     }
 
-    saveKeyBtn.addEventListener('click', () => {
+    saveKeyBtn.addEventListener('click', async () => {
       const key = apiKeyInput.value.trim();
       if (key) {
-        aiClient.setApiKey(key);
+        await aiClient.setApiKey(key);
         if (keyStatus) {
           keyStatus.textContent = 'Key saved!';
           keyStatus.classList.remove('hidden');

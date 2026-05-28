@@ -1,0 +1,17 @@
+NexusPDF
+Copyright 2025-2026 NexusPDF Contributors
+
+This product is based on BentoPDF (https://github.com/alam00000/bentopdf),
+Copyright 2024-2026 BentoPDF Contributors, licensed under the GNU Affero
+General Public License v3.0 (AGPL-3.0).
+
+NexusPDF is a substantially modified fork incorporating original AI features,
+Tauri desktop integration, and additional tooling not present in the upstream
+project.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+A copy of the AGPL-3.0 license is included in the LICENSE file.
