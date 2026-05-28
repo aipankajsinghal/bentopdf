@@ -60,6 +60,8 @@ export const ribbonConfig: RibbonTab[] = [
               { id: 'copy-pages', name: 'Copy Pages', icon: 'copy', tooltip: 'Copy selected pages (Ctrl+C)' },
               { id: 'cut-pages', name: 'Cut Pages', icon: 'scissors', tooltip: 'Cut selected pages (Ctrl+X)' },
               { id: 'paste-pages', name: 'Paste Pages', icon: 'clipboard-paste', tooltip: 'Paste pages (Ctrl+V)' },
+              { id: 'select-all', name: 'Select All', icon: 'check-square', tooltip: 'Select all pages (Ctrl+A)' },
+              { id: 'deselect', name: 'Deselect All', icon: 'square', tooltip: 'Deselect all pages (Esc)' },
             ],
           },
         ],

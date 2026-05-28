@@ -303,6 +303,19 @@ function registerToolHandlers(): void {
     await redo();
   });
 
+  // Selection
+  registerToolHandler('select-all', () => {
+    const doc = getActiveDocument();
+    if (doc && typeof selectAllPages === 'function') {
+      selectAllPages(doc.pageData?.length || 1);
+    }
+  });
+  registerToolHandler('deselect', () => {
+    if (typeof clearPageSelection === 'function') {
+      clearPageSelection();
+    }
+  });
+
   // Zoom controls
   registerToolHandler('zoom-in', zoomIn);
   registerToolHandler('zoom-out', zoomOut);
