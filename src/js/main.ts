@@ -268,11 +268,7 @@ function registerToolHandlers(): void {
   registerToolHandler('open-file', openFilesNative);
   registerToolHandler('save', saveActiveDocument);
   registerToolHandler('save-as', saveAsDocument);
-  registerToolHandler('close-doc', () => {
-    if (typeof closeActiveDocument === 'function') {
-      closeActiveDocument();
-    }
-  });
+  registerToolHandler('close-doc', closeActiveDocument);
 
   registerToolHandler('download', downloadActiveDocument);
   registerToolHandler('add-pdf', () => {

@@ -1,10 +1,10 @@
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, Emitter, State};
+use tauri::{AppHandle, Manager, State};
 
 #[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    WindowEvent,
+    Emitter, WindowEvent,
 };
 
 // ── AI key state ─────────────────────────────────────────────────────────────
@@ -118,9 +118,6 @@ pub fn run() {
 
             #[cfg(desktop)]
             {
-                // Create native menu bar
-                let app_handle = app.handle();
-
                 // File menu
                 let open_item = MenuItem::with_id(app, "open", "Open PDF...", true, Some("CmdOrCtrl+O"))?;
                 let save_item = MenuItem::with_id(app, "save", "Save", true, Some("CmdOrCtrl+S"))?;
@@ -251,33 +248,32 @@ pub fn run() {
                 });
 
                 // Handle file drop events via window events
-                let main_window = app.get_webview_window("main").unwrap();
-                let window_clone = main_window.clone();
-                main_window.on_window_event(move |event| {
-                    if let WindowEvent::DragDrop(drag_drop) = event {
-                        match drag_drop {
-                            tauri::DragDropEvent::Drop { paths, position: _ } => {
-                                let pdf_paths: Vec<String> = paths
-                                    .iter()
-                                    .filter(|p| {
-                                        p.extension()
-                                            .map(|ext| ext.to_string_lossy().to_lowercase() == "pdf")
-                                            .unwrap_or(false)
-                                    })
-                                    .map(|p| p.to_string_lossy().to_string())
-                                    .collect();
+                if let Some(main_window) = app.get_webview_window("main") {
+                    let window_clone = main_window.clone();
+                    main_window.on_window_event(move |event| {
+                        if let WindowEvent::DragDrop(drag_drop) = event {
+                            match drag_drop {
+                                tauri::DragDropEvent::Drop { paths, position: _ } => {
+                                    let pdf_paths: Vec<String> = paths
+                                        .iter()
+                                        .filter(|p| {
+                                            p.extension()
+                                                .map(|ext| ext.to_string_lossy().to_lowercase() == "pdf")
+                                                .unwrap_or(false)
+                                        })
+                                        .map(|p| p.to_string_lossy().to_string())
+                                        .collect();
 
-                                if !pdf_paths.is_empty() {
-                                    log::info!("Files dropped: {:?}", pdf_paths);
-                                    let _ = window_clone.emit("file-drop", &pdf_paths);
+                                    if !pdf_paths.is_empty() {
+                                        log::info!("Files dropped: {:?}", pdf_paths);
+                                        let _ = window_clone.emit("file-drop", &pdf_paths);
+                                    }
                                 }
+                                _ => {}
                             }
-                            _ => {}
                         }
-                    }
-                });
-
-                let _ = app_handle;
+                    });
+                }
             }
 
             Ok(())
