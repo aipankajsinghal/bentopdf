@@ -1580,12 +1580,19 @@ export async function scannerEffect(): Promise<void> {
   const doc = getActiveDocument();
   if (!doc || !doc.pdfJsDoc) return;
 
-  const pdfDoc   = await PDFDocument.create();
+  const srcDoc    = await PDFDocument.load(doc.pdfBytes);
+  const pdfDoc    = await PDFDocument.create();
   const pageCount = doc.pdfJsDoc.numPages;
   const selected  = getSelectedPages();
-  const targets   = selected.length ? selected : Array.from({ length: pageCount }, (_, i) => i);
+  const targets   = new Set(selected.length ? selected : Array.from({ length: pageCount }, (_, i) => i));
 
   for (let i = 0; i < pageCount; i++) {
+    if (!targets.has(i)) {
+      const [copied] = await pdfDoc.copyPages(srcDoc, [i]);
+      pdfDoc.addPage(copied);
+      continue;
+    }
+
     const pdfPage = await doc.pdfJsDoc.getPage(i + 1);
     const viewport = pdfPage.getViewport({ scale: 1.5 });
     const canvas  = document.createElement('canvas');
@@ -1594,25 +1601,20 @@ export async function scannerEffect(): Promise<void> {
     const ctx     = canvas.getContext('2d')!;
     await pdfPage.render({ canvasContext: ctx, viewport, canvas }).promise;
 
-    if (targets.includes(i)) {
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const d = imgData.data;
-      for (let j = 0; j < d.length; j += 4) {
-        // Desaturate with warm tint
-        const gray = 0.299 * d[j] + 0.587 * d[j+1] + 0.114 * d[j+2];
-        // Slight contrast boost then warm tint
-        const c = Math.max(0, Math.min(255, (gray - 128) * 1.15 + 128));
-        d[j]   = Math.min(255, c + 8);   // R warmer
-        d[j+1] = Math.min(255, c + 2);   // G neutral
-        d[j+2] = Math.max(0,   c - 8);   // B cooler
-        // Subtle noise
-        const noise = (Math.random() - 0.5) * 10;
-        d[j]   = Math.max(0, Math.min(255, d[j]   + noise));
-        d[j+1] = Math.max(0, Math.min(255, d[j+1] + noise));
-        d[j+2] = Math.max(0, Math.min(255, d[j+2] + noise));
-      }
-      ctx.putImageData(imgData, 0, 0);
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = imgData.data;
+    for (let j = 0; j < d.length; j += 4) {
+      const gray = 0.299 * d[j] + 0.587 * d[j+1] + 0.114 * d[j+2];
+      const c = Math.max(0, Math.min(255, (gray - 128) * 1.15 + 128));
+      d[j]   = Math.min(255, c + 8);
+      d[j+1] = Math.min(255, c + 2);
+      d[j+2] = Math.max(0,   c - 8);
+      const noise = (Math.random() - 0.5) * 10;
+      d[j]   = Math.max(0, Math.min(255, d[j]   + noise));
+      d[j+1] = Math.max(0, Math.min(255, d[j+1] + noise));
+      d[j+2] = Math.max(0, Math.min(255, d[j+2] + noise));
     }
+    ctx.putImageData(imgData, 0, 0);
 
     const jpegData  = canvas.toDataURL('image/jpeg', 0.82);
     const jpegBytes = Uint8Array.from(atob(jpegData.split(',')[1]), c => c.charCodeAt(0));
