@@ -1811,15 +1811,19 @@ function detectSkewAngle(canvas: HTMLCanvasElement): number {
     binary[i] = (0.299 * r + 0.587 * g + 0.114 * b) < 180 ? 1 : 0;
   }
 
-  // Collect dark pixel coordinates for efficient rotation
+  // Collect dark pixel coordinates with subsampling to prevent UI thread blocking
   const xs: number[] = [];
   const ys: number[] = [];
   const cx = W / 2, cy = H / 2;
+  let pixelCount = 0;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       if (binary[y * W + x]) {
-        xs.push(x - cx);
-        ys.push(y - cy);
+        pixelCount++;
+        if (pixelCount % 5 === 0) {
+          xs.push(x - cx);
+          ys.push(y - cy);
+        }
       }
     }
   }
