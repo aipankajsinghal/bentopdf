@@ -40,7 +40,7 @@ jobs:
           branch: 'main'
           
           # Allowlist for bot accounts and repo owner (won't need to sign CLA)
-          allowlist: 'bot*,*[bot],dependabot*,renovate*,github-actions*,aipankajsinghal'
+          allowlist: 'bot*,*[bot],dependabot*,renovate*,github-actions*,aipankajsinghal,xpankaj-png,claude'
           
           # Custom messages
           custom-notsigned-prcomment: |
