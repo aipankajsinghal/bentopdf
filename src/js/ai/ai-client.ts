@@ -43,6 +43,17 @@ export class AIClient {
         }
     }
 
+    async clearKey() {
+        if (isTauri()) {
+            await tauriInvoke('ai_set_key', { key: '' });
+            this._tauriHasKey = false;
+        } else {
+            this.apiKey = '';
+            localStorage.removeItem('bentopdf_gemini_api_key');
+            this.adapter = null;
+        }
+    }
+
     getApiKey(): string {
         return this.apiKey;
     }
