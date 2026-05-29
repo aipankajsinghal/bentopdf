@@ -23,12 +23,19 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
 }
 
 fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
-    if hex.len() % 2 != 0 {
+    if !hex.is_ascii() {
+        return Err("invalid hex string".to_string());
+    }
+    let bytes = hex.as_bytes();
+    if bytes.len() % 2 != 0 {
         return Err("invalid hex length".to_string());
     }
-    (0..hex.len())
+    (0..bytes.len())
         .step_by(2)
-        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|e| e.to_string()))
+        .map(|i| {
+            let s = std::str::from_utf8(&bytes[i..i + 2]).map_err(|e| e.to_string())?;
+            u8::from_str_radix(s, 16).map_err(|e| e.to_string())
+        })
         .collect()
 }
 
@@ -104,11 +111,10 @@ fn ai_has_key(state: State<'_, ApiKeyState>) -> bool {
 }
 
 #[tauri::command]
-async fn ai_generate_text(prompt: String, state: State<'_, ApiKeyState>) -> Result<String, String> {
+async fn ai_generate_text(prompt: String, state: State<'_, ApiKeyState>, client: State<'_, reqwest::Client>) -> Result<String, String> {
     let key = state.0.lock().map_err(|e| e.to_string())?.clone()
         .ok_or_else(|| "Gemini API key not configured".to_string())?;
     let body = serde_json::json!({ "contents": [{ "parts": [{ "text": prompt }] }] });
-    let client = reqwest::Client::new();
     let resp = client.post(gemini_url(&key)).json(&body).send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
         let err: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
@@ -119,7 +125,7 @@ async fn ai_generate_text(prompt: String, state: State<'_, ApiKeyState>) -> Resu
 }
 
 #[tauri::command]
-async fn ai_generate_vision(prompt: String, image_base64: String, state: State<'_, ApiKeyState>) -> Result<String, String> {
+async fn ai_generate_vision(prompt: String, image_base64: String, state: State<'_, ApiKeyState>, client: State<'_, reqwest::Client>) -> Result<String, String> {
     let key = state.0.lock().map_err(|e| e.to_string())?.clone()
         .ok_or_else(|| "Gemini API key not configured".to_string())?;
     let body = serde_json::json!({
@@ -128,7 +134,6 @@ async fn ai_generate_vision(prompt: String, image_base64: String, state: State<'
             { "inline_data": { "mime_type": "image/jpeg", "data": image_base64 } }
         ]}]
     });
-    let client = reqwest::Client::new();
     let resp = client.post(gemini_url(&key)).json(&body).send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
         let err: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
@@ -144,6 +149,7 @@ async fn ai_generate_vision(prompt: String, image_base64: String, state: State<'
 pub fn run() {
     let builder = tauri::Builder::default()
         .manage(ApiKeyState(Mutex::new(None)))
+        .manage(reqwest::Client::new())
         .invoke_handler(tauri::generate_handler![
             ai_set_key,
             ai_has_key,

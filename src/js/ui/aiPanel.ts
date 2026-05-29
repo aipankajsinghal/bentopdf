@@ -194,7 +194,7 @@ export class AIPanel {
 
     this.container.querySelector('#ai-key-toggle-btn')?.addEventListener('click', () => {
       const input = this.container.querySelector('#ai-key-input') as HTMLInputElement;
-      const icon = this.container.querySelector('#ai-key-toggle-btn i');
+      const icon = this.container.querySelector('#ai-key-toggle-btn [data-lucide]');
       if (input.type === 'password') {
         input.type = 'text';
         icon?.setAttribute('data-lucide', 'eye-off');
