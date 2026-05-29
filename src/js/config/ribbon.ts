@@ -30,6 +30,18 @@ export const ribbonConfig: RibbonTab[] = [
         name: 'File',
         tools: [
           { id: 'open-file', name: 'Open', icon: 'folder-open', tooltip: 'Open PDF file' },
+          {
+            id: 'save-group',
+            name: 'Save',
+            icon: 'save',
+            type: 'dropdown',
+            tooltip: 'Save document',
+            children: [
+              { id: 'save', name: 'Save', icon: 'save', tooltip: 'Save to current path (Ctrl+S)' },
+              { id: 'save-as', name: 'Save As', icon: 'save-all', tooltip: 'Save to new location (Ctrl+Shift+S)' },
+              { id: 'close-doc', name: 'Close', icon: 'file-x', tooltip: 'Close active document (Ctrl+W)' },
+            ],
+          },
           { id: 'download', name: 'Download', icon: 'download', tooltip: 'Download PDF' },
         ],
       },
@@ -48,6 +60,8 @@ export const ribbonConfig: RibbonTab[] = [
               { id: 'copy-pages', name: 'Copy Pages', icon: 'copy', tooltip: 'Copy selected pages (Ctrl+C)' },
               { id: 'cut-pages', name: 'Cut Pages', icon: 'scissors', tooltip: 'Cut selected pages (Ctrl+X)' },
               { id: 'paste-pages', name: 'Paste Pages', icon: 'clipboard-paste', tooltip: 'Paste pages (Ctrl+V)' },
+              { id: 'select-all', name: 'Select All', icon: 'check-square', tooltip: 'Select all pages (Ctrl+A)' },
+              { id: 'deselect', name: 'Deselect All', icon: 'square', tooltip: 'Deselect all pages (Esc)' },
             ],
           },
         ],
@@ -129,6 +143,7 @@ export const ribbonConfig: RibbonTab[] = [
               { id: 'background-color', name: 'Background Color', icon: 'palette', tooltip: 'Change background' },
               { id: 'text-color', name: 'Text Color', icon: 'type', tooltip: 'Change text color' },
               { id: 'greyscale', name: 'Greyscale', icon: 'circle-half', tooltip: 'Convert to greyscale' },
+              { id: 'scanner-effect', name: 'Scanner Effect', icon: 'scan', tooltip: 'Apply warm scanner look' },
             ],
           },
         ],
@@ -168,6 +183,7 @@ export const ribbonConfig: RibbonTab[] = [
               { id: 'rotate-left', name: 'Rotate Left', icon: 'rotate-ccw', tooltip: 'Rotate 90° left' },
               { id: 'rotate-right', name: 'Rotate Right', icon: 'rotate-cw', tooltip: 'Rotate 90° right' },
               { id: 'rotate-180', name: 'Rotate 180°', icon: 'refresh-cw', tooltip: 'Rotate 180°' },
+              { id: 'rotate-custom', name: 'Custom Angle', icon: 'compass', tooltip: 'Rotate by arbitrary angle (e.g. 45°, -30°)' },
               { id: 'reverse-pages', name: 'Reverse Order', icon: 'arrow-down-z-a', tooltip: 'Reverse page order' },
             ],
           },
@@ -179,6 +195,7 @@ export const ribbonConfig: RibbonTab[] = [
         name: 'Insert',
         tools: [
           { id: 'add-blank', name: 'Blank Page', icon: 'file-plus-2', tooltip: 'Insert blank page' },
+          { id: 'alternate-merge', name: 'Alt. Merge', icon: 'shuffle', tooltip: 'Interleave pages from a second PDF' },
         ],
       },
       {
@@ -188,6 +205,8 @@ export const ribbonConfig: RibbonTab[] = [
           { id: 'n-up', name: 'N-Up', icon: 'layout-grid', tooltip: 'Multiple pages per sheet' },
           { id: 'divide', name: 'Divide', icon: 'table-columns-split', tooltip: 'Divide pages' },
           { id: 'combine-single', name: 'Combine', icon: 'unfold-vertical', tooltip: 'Combine into single page' },
+          { id: 'pdf-booklet', name: 'Booklet', icon: 'book-open', tooltip: 'Rearrange pages for booklet printing' },
+          { id: 'pdf-overlay', name: 'Overlay', icon: 'layers', tooltip: 'Overlay or underlay another PDF' },
         ],
       },
     ],
@@ -218,6 +237,7 @@ export const ribbonConfig: RibbonTab[] = [
           },
           { id: 'text-to-pdf', name: 'Text to PDF', icon: 'file-pen', tooltip: 'Convert text file' },
           { id: 'json-to-pdf', name: 'JSON to PDF', icon: 'file-code', tooltip: 'Convert JSON' },
+          { id: 'markdown-to-pdf', name: 'Markdown to PDF', icon: 'file-type-2', tooltip: 'Convert Markdown file to PDF' },
         ],
       },
       {
@@ -238,12 +258,17 @@ export const ribbonConfig: RibbonTab[] = [
             ],
           },
           { id: 'pdf-to-json', name: 'PDF to JSON', icon: 'file-code', tooltip: 'Export as JSON' },
+          { id: 'pdf-to-txt', name: 'PDF to TXT', icon: 'file-text', tooltip: 'Export text content as plain text' },
+          { id: 'pdf-to-docx', name: 'PDF to DOCX', icon: 'file-type', tooltip: 'Export text content as Word document' },
+          { id: 'pdf-to-svg', name: 'PDF to SVG', icon: 'pen-tool', tooltip: 'Export pages as SVG' },
+          { id: 'extract-images', name: 'Extract Images', icon: 'images', tooltip: 'Extract embedded images from PDF' },
         ],
       },
       {
         name: 'OCR',
         tools: [
           { id: 'ocr', name: 'OCR', icon: 'scan-text', tooltip: 'Make PDF searchable' },
+          { id: 'deskew-pdf', name: 'Deskew', icon: 'rotate-cw', tooltip: 'Auto-detect and correct page skew' },
         ],
       },
     ],
@@ -370,6 +395,19 @@ export const ribbonConfig: RibbonTab[] = [
         tools: [
           { id: 'metadata', name: 'Metadata', icon: 'info', tooltip: 'View/edit metadata' },
           { id: 'dimensions', name: 'Dimensions', icon: 'ruler', tooltip: 'View page dimensions' },
+        ],
+      },
+      {
+        name: 'Legal',
+        tools: [
+          { id: 'bates-numbering', name: 'Bates', icon: 'hash', tooltip: 'Stamp Bates numbers on pages' },
+          { id: 'add-page-labels', name: 'Page Labels', icon: 'tag', tooltip: 'Set named page labels (Roman, alphabetic…)' },
+        ],
+      },
+      {
+        name: 'Export',
+        tools: [
+          { id: 'bundle-to-zip', name: 'Bundle ZIP', icon: 'archive', tooltip: 'Download all open PDFs as a ZIP archive' },
         ],
       },
       {

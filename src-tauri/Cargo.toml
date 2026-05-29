@@ -1,9 +1,9 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "BentoPDF - PDF Toolkit"
-authors = ["BentoPDF Team"]
-license = "MIT"
+description = "NexusPDF - AI-Powered PDF Toolkit"
+authors = ["NexusPDF Team"]
+license = "AGPL-3.0"
 repository = "https://github.com/aipankajsinghal/bentopdf"
 edition = "2021"
 rust-version = "1.77.2"
@@ -25,4 +25,7 @@ tauri = { version = "2.9.5", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"

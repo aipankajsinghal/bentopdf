@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "BentoPDF",
+  "productName": "NexusPDF",
   "version": "1.11.2",
-  "identifier": "com.bentopdf.app",
+  "identifier": "com.nexuspdf.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "BentoPDF",
+        "title": "NexusPDF",
         "label": "main",
         "width": 1280,
         "height": 800,
@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: asset: blob:; font-src 'self'; frame-src 'none'; base-uri 'self'; form-action 'self';"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: asset: blob:; font-src 'self' data:; worker-src blob:; connect-src 'self' blob:; frame-src 'none'; base-uri 'self'; form-action 'self';"
     }
   },
   "bundle": {

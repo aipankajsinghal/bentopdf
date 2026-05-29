@@ -1,4 +1,7 @@
-import { PDFDocument, RotationTypes, StandardFonts, rgb, degrees } from 'pdf-lib';
+import { PDFDocument, RotationTypes, StandardFonts, rgb, degrees, PDFName, PDFDict, PDFArray, PDFNumber, PDFString } from 'pdf-lib';
+import JSZip from 'jszip';
+import { pdfjsLib } from './utils/pdfjs-init.js';
+import { Document as DocxDocument, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { showWatermarkModal, showStampModal, showSignModal } from './ui/editorModals.js';
 import { showPlacementOverlay } from './ui/placementOverlay.js';
 import Tesseract from 'tesseract.js';
@@ -7,6 +10,7 @@ import { showInputModal } from './ui/inputModal.js';
 import { showOcrModal } from './ui/editorModals.js';
 import {
   getActiveDocument,
+  getAllDocuments,
   updateDocumentBytes,
   createDocumentFromBytes,
   openDocument,
@@ -1112,6 +1116,866 @@ export async function pdfToJson(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+// ============================================================================
+// PDF to Text / DOCX export
+// ============================================================================
+
+export async function pdfToTxt(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc || !doc.pdfJsDoc) return;
+
+  const selected = getSelectedPages();
+  const pageNums = selected.length
+    ? selected.map(i => i + 1)
+    : Array.from({ length: doc.pdfJsDoc.numPages }, (_, i) => i + 1);
+
+  const pageTexts: string[] = [];
+  for (const pageNum of pageNums) {
+    const page = await doc.pdfJsDoc.getPage(pageNum);
+    const content = await page.getTextContent();
+    const text = (content.items as any[]).filter(item => typeof item.str === 'string').map(item => item.str).join(' ');
+    pageTexts.push(`--- Page ${pageNum} ---\n${text}`);
+  }
+
+  const fullText = pageTexts.join('\n\n');
+  const blob = new Blob([fullText], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = doc.fileName.replace(/\.pdf$/i, '') + '.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+  clearPageSelection();
+}
+
+export async function pdfToDocx(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc || !doc.pdfJsDoc) return;
+
+  const selected = getSelectedPages();
+  const pageNums = selected.length
+    ? selected.map(i => i + 1)
+    : Array.from({ length: doc.pdfJsDoc.numPages }, (_, i) => i + 1);
+
+  const children: Paragraph[] = [];
+  for (const pageNum of pageNums) {
+    if (children.length > 0) {
+      children.push(new Paragraph({ pageBreakBefore: true, children: [] }));
+    }
+    children.push(
+      new Paragraph({
+        text: `Page ${pageNum}`,
+        heading: HeadingLevel.HEADING_2,
+      })
+    );
+    const page = await doc.pdfJsDoc.getPage(pageNum);
+    const content = await page.getTextContent();
+    const text = (content.items as any[]).filter(item => typeof item.str === 'string').map(item => item.str).join(' ');
+    children.push(new Paragraph({ children: [new TextRun(text)] }));
+  }
+
+  const docx = new DocxDocument({ sections: [{ children }] });
+  const blob = await Packer.toBlob(docx);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = doc.fileName.replace(/\.pdf$/i, '') + '.docx';
+  a.click();
+  URL.revokeObjectURL(url);
+  clearPageSelection();
+}
+
+// ============================================================================
+// Alternate Merge — interleave pages from two PDFs
+// ============================================================================
+
+export async function alternateMerge(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) { showAlert('Alternate Merge', 'Open a PDF first.'); return; }
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/pdf,.pdf';
+  input.click();
+  const file = await new Promise<File | null>(res => {
+    input.onchange = () => res(input.files?.[0] ?? null);
+    input.oncancel = () => res(null);
+    // fallback if oncancel not supported
+    setTimeout(() => res(null), 60000);
+  });
+  if (!file) return;
+
+  const aDoc = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+  const bBytes = new Uint8Array(await file.arrayBuffer());
+  const bDoc = await PDFDocument.load(bBytes, { ignoreEncryption: true });
+
+  const merged = await PDFDocument.create();
+  const aPages = await merged.copyPages(aDoc, aDoc.getPageIndices());
+  const bPages = await merged.copyPages(bDoc, bDoc.getPageIndices());
+  const maxLen = Math.max(aPages.length, bPages.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (i < aPages.length) merged.addPage(aPages[i]);
+    if (i < bPages.length) merged.addPage(bPages[i]);
+  }
+
+  await savePdfDocToActive(doc, merged);
+  clearPageSelection();
+}
+
+// ============================================================================
+// Add Page Labels — write named labels into the PDF catalog
+// ============================================================================
+
+export async function addPageLabels(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  const raw = await showInputModal(
+    'Add Page Labels',
+    'prefix:, style: D | r | R | a | A, start: 1\nExample:  prefix:Appendix-, style:D, start:1\nLeave blank for plain Arabic from page 1.'
+  );
+  if (raw === null) return;
+
+  // Parse the simple "key:value, key:value" format
+  const params: Record<string, string> = {};
+  raw.split(',').forEach(part => {
+    const [k, v] = part.split(':').map(s => s.trim());
+    if (k && v !== undefined) params[k.toLowerCase()] = v;
+  });
+
+  const prefix = params['prefix'] ?? '';
+  const style  = ['D','r','R','a','A'].includes(params['style'] ?? '') ? params['style'] : 'D';
+  const start  = parseInt(params['start'] ?? '1', 10) || 1;
+
+  const pdfDoc = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+
+  // Build /PageLabels << /Nums [ 0 << /S /X /P (prefix) /St N >> ] >>
+  const labelDict = pdfDoc.context.obj({
+    S: PDFName.of(style!),
+    ...(prefix ? { P: PDFString.of(prefix) } : {}),
+    ...(start !== 1 ? { St: PDFNumber.of(start) } : {}),
+  }) as PDFDict;
+
+  const numsArray = pdfDoc.context.obj([PDFNumber.of(0), labelDict]) as PDFArray;
+  const pageLabels = pdfDoc.context.obj({ Nums: numsArray }) as PDFDict;
+  pdfDoc.catalog.set(PDFName.of('PageLabels'), pageLabels);
+
+  await savePdfDocToActive(doc, pdfDoc);
+}
+
+// ============================================================================
+// Bates Numbering — stamp sequential legal numbers on each page
+// ============================================================================
+
+export async function batesNumbering(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  const raw = await showInputModal('Bates Numbering', 'prefix:BATES, start:1, digits:6\nExample:  prefix:DOC-, start:1, digits:6');
+  if (raw === null) return;
+
+  const params: Record<string, string> = {};
+  raw.split(',').forEach(part => {
+    const [k, v] = part.split(':').map(s => s.trim());
+    if (k && v !== undefined) params[k.toLowerCase()] = v;
+  });
+
+  const prefix = params['prefix'] ?? 'BATES';
+  const start  = parseInt(params['start']  ?? '1', 10) || 1;
+  const digits = Math.max(1, parseInt(params['digits'] ?? '6', 10) || 6);
+
+  const pdfDoc = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+  const font   = await pdfDoc.embedFont(StandardFonts.Courier);
+  const selected = getSelectedPages();
+  const targets  = selected.length
+    ? selected
+    : Array.from({ length: pdfDoc.getPageCount() }, (_, i) => i);
+
+  targets.forEach((i, seq) => {
+    if (i < 0 || i >= pdfDoc.getPageCount()) return;
+    const page    = pdfDoc.getPage(i);
+    const { width, height } = page.getSize();
+    const label   = `${prefix}${String(start + seq).padStart(digits, '0')}`;
+    const fontSize = 8;
+    const textWidth = font.widthOfTextAtSize(label, fontSize);
+    page.drawText(label, {
+      x: width - textWidth - 14,
+      y: 10,
+      size: fontSize,
+      font,
+      color: rgb(0, 0, 0),
+    });
+  });
+
+  await savePdfDocToActive(doc, pdfDoc);
+  clearPageSelection();
+}
+
+// ============================================================================
+// Custom Rotation — rotate by any arbitrary angle
+// ============================================================================
+
+export async function rotateCustom(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  const raw = await showInputModal('Custom Rotation', 'Enter angle in degrees (e.g. 45, -30, 270):');
+  if (raw === null) return;
+  const angle = parseFloat(raw.trim());
+  if (!isFinite(angle)) { showAlert('Custom Rotation', 'Invalid angle.'); return; }
+
+  const pdfDoc = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+  const selected = getSelectedPages();
+  const targets  = selected.length ? selected : [Math.max(0, doc.currentPage - 1)];
+
+  targets.forEach(i => {
+    if (i < 0 || i >= pdfDoc.getPageCount()) return;
+    const p    = pdfDoc.getPage(i);
+    const base = p.getRotation().angle;
+    const next = ((base + angle) % 360 + 360) % 360;
+    p.setRotation(degrees(next));
+  });
+
+  await savePdfDocToActive(doc, pdfDoc);
+  clearPageSelection();
+}
+
+// ============================================================================
+// Bundle to ZIP — pack all open documents into a single ZIP download
+// ============================================================================
+
+export async function bundleToZip(): Promise<void> {
+  const docs = getAllDocuments();
+  if (docs.length === 0) { showAlert('Bundle to ZIP', 'No open documents.'); return; }
+
+  const zip = new JSZip();
+  // Deduplicate file names
+  const seen = new Map<string, number>();
+  for (const d of docs) {
+    const base = d.fileName || 'document.pdf';
+    const count = (seen.get(base) ?? 0) + 1;
+    seen.set(base, count);
+    const name = count === 1 ? base : base.replace(/\.pdf$/i, '') + `_${count}.pdf`;
+    zip.file(name, d.pdfBytes);
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `nexuspdf-bundle-${Date.now()}.zip`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+}
+
+// ============================================================================
+// PDF Overlay / Underlay — stamp a second PDF on every page
+// ============================================================================
+
+export async function pdfOverlay(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  // Pick mode
+  const mode = await new Promise<'overlay' | 'underlay' | null>(resolve => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4';
+    wrapper.innerHTML = `
+      <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-2xl w-full max-w-sm p-6">
+        <h3 class="text-lg font-bold text-white mb-4">PDF Overlay / Underlay</h3>
+        <p class="text-sm text-gray-400 mb-4">Pick a second PDF and how to composite it with each page of the active document.</p>
+        <div class="flex gap-3 justify-end">
+          <button id="btn-cancel" class="px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded">Cancel</button>
+          <button id="btn-underlay" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded">Underlay</button>
+          <button id="btn-overlay" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded">Overlay</button>
+        </div>
+      </div>`;
+    document.body.appendChild(wrapper);
+    wrapper.querySelector('#btn-overlay')!.addEventListener('click', () => { wrapper.remove(); resolve('overlay'); });
+    wrapper.querySelector('#btn-underlay')!.addEventListener('click', () => { wrapper.remove(); resolve('underlay'); });
+    wrapper.querySelector('#btn-cancel')!.addEventListener('click', () => { wrapper.remove(); resolve(null); });
+  });
+  if (!mode) return;
+
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'application/pdf,.pdf'; input.click();
+  const file = await new Promise<File | null>(res => {
+    input.onchange = () => res(input.files?.[0] ?? null);
+    setTimeout(() => res(null), 60000);
+  });
+  if (!file) return;
+
+  const stampBytes = new Uint8Array(await file.arrayBuffer());
+  const pdfDoc = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+  const stampDoc = await PDFDocument.load(stampBytes, { ignoreEncryption: true });
+  const stampPageCount = stampDoc.getPageCount();
+
+  // Embed stamp pages and (for underlay) original pages once, outside the loop
+  const stampIndices = Array.from({ length: stampPageCount }, (_, idx) => idx);
+  const embeddedStampPages = await pdfDoc.embedPdf(stampBytes, stampIndices);
+
+  const origIndices = Array.from({ length: pdfDoc.getPageCount() }, (_, idx) => idx);
+  const embeddedOrigPages = mode === 'underlay' ? await pdfDoc.embedPdf(doc.pdfBytes, origIndices) : [];
+
+  for (let i = 0; i < pdfDoc.getPageCount(); i++) {
+    const stampIdx = i % stampPageCount;
+    const embedded = embeddedStampPages[stampIdx];
+    const page = pdfDoc.getPage(i);
+    const { width, height } = page.getSize();
+    const drawOpts = { x: 0, y: 0, width, height, opacity: 0.6 };
+    if (mode === 'overlay') {
+      page.drawPage(embedded, drawOpts);
+    } else {
+      // Underlay: draw stamp first, then re-embed original page content on top
+      // pdf-lib can't reorder existing content, so we create a new page with stamp then original
+      const origEmbedded = embeddedOrigPages[i];
+      const blank = pdfDoc.insertPage(i + 1, [width, height]);
+      blank.drawPage(embedded, { x: 0, y: 0, width, height, opacity: 0.6 });
+      blank.drawPage(origEmbedded, { x: 0, y: 0, width, height });
+      pdfDoc.removePage(i); // remove original page
+    }
+  }
+
+  await savePdfDocToActive(doc, pdfDoc);
+}
+
+// ============================================================================
+// Extract Images — pull embedded images out of a PDF
+// ============================================================================
+
+export async function extractImages(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc || !doc.pdfJsDoc) return;
+
+  const selected = getSelectedPages();
+  const pageNums = selected.length
+    ? selected.map(i => i + 1)
+    : Array.from({ length: doc.pdfJsDoc.numPages }, (_, i) => i + 1);
+
+  let count = 0;
+  const { OPS } = pdfjsLib as any;
+
+  for (const pageNum of pageNums) {
+    const page = await doc.pdfJsDoc.getPage(pageNum);
+    const opList = await page.getOperatorList();
+    const seen = new Set<string>();
+
+    for (let i = 0; i < opList.fnArray.length; i++) {
+      const fn = opList.fnArray[i];
+      if (fn !== OPS.paintImageXObject && fn !== OPS.paintJpegXObject &&
+          fn !== OPS.paintImageMaskXObject) continue;
+      const name: string = opList.argsArray[i][0];
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+
+      const imgObj = await new Promise<any>(resolve => {
+        (page as any).objs.get(name, (obj: any) => resolve(obj));
+      });
+      if (!imgObj) continue;
+
+      const canvas = document.createElement('canvas');
+
+      if (imgObj.bitmap) {
+        // pdfjs v5 returns ImageBitmap
+        canvas.width  = imgObj.bitmap.width;
+        canvas.height = imgObj.bitmap.height;
+        canvas.getContext('2d')!.drawImage(imgObj.bitmap, 0, 0);
+      } else if (imgObj.data && imgObj.width && imgObj.height) {
+        canvas.width  = imgObj.width;
+        canvas.height = imgObj.height;
+        const ctx  = canvas.getContext('2d')!;
+        const idat = ctx.createImageData(imgObj.width, imgObj.height);
+        const src  = imgObj.data as Uint8ClampedArray | Uint8Array;
+        const kind: number = imgObj.kind ?? 3;
+        if (kind === 2) {
+          // RGB_24BPP → RGBA
+          for (let j = 0, k = 0; j < src.length; j += 3, k += 4) {
+            idat.data[k] = src[j]; idat.data[k+1] = src[j+1];
+            idat.data[k+2] = src[j+2]; idat.data[k+3] = 255;
+          }
+        } else if (kind === 1) {
+          // Grayscale → RGBA
+          for (let j = 0, k = 0; j < src.length; j++, k += 4) {
+            const g = src[j];
+            idat.data[k] = g; idat.data[k+1] = g;
+            idat.data[k+2] = g; idat.data[k+3] = 255;
+          }
+        } else {
+          idat.data.set(src.length === idat.data.length ? src : src.subarray(0, idat.data.length));
+        }
+        ctx.putImageData(idat, 0, 0);
+      } else {
+        continue;
+      }
+
+      count++;
+      const idx = count;
+      const baseName = doc.fileName.replace(/\.pdf$/i, '');
+      canvas.toBlob(blob => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${baseName}_p${pageNum}_img${idx}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    }
+  }
+
+  if (count === 0)
+    showAlert('Extract Images', 'No embedded images were found in the selected pages.');
+  else
+    showAlert('Extract Images', `Extracted ${count} image${count > 1 ? 's' : ''}.`);
+}
+
+// ============================================================================
+// PDF Booklet — reorder pages for saddle-stitch printing
+// ============================================================================
+
+export async function pdfBooklet(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc) return;
+
+  const srcBytes = doc.pdfBytes;
+  const srcDoc   = await PDFDocument.load(srcBytes, { ignoreEncryption: true });
+
+  // Pad to nearest multiple of 4
+  while (srcDoc.getPageCount() % 4 !== 0) srcDoc.addPage();
+  const n = srcDoc.getPageCount();
+
+  // Build sheet pairs (leftPage, rightPage) as 0-based indices
+  const pairs: [number, number][] = [];
+  let lo = 0, hi = n - 1, flip = false;
+  while (lo < hi) {
+    pairs.push(flip ? [lo, hi] : [hi, lo]);
+    lo++; hi--; flip = !flip;
+  }
+
+  // Embed all source pages once
+  const paddedBytes = await srcDoc.save();
+  const bookletDoc  = await PDFDocument.create();
+  const allPages    = await bookletDoc.embedPdf(paddedBytes, srcDoc.getPageIndices());
+
+  // Use first page size (portrait); sheet is 2× wide (landscape)
+  const firstSrc  = srcDoc.getPage(0);
+  const { width: pw, height: ph } = firstSrc.getSize();
+
+  for (const [leftIdx, rightIdx] of pairs) {
+    const sheet = bookletDoc.addPage([pw * 2, ph]);
+    if (leftIdx < allPages.length)
+      sheet.drawPage(allPages[leftIdx],  { x: 0,  y: 0, width: pw, height: ph });
+    if (rightIdx < allPages.length)
+      sheet.drawPage(allPages[rightIdx], { x: pw, y: 0, width: pw, height: ph });
+  }
+
+  await savePdfDocToActive(doc, bookletDoc);
+}
+
+// ============================================================================
+// Scanner Effect — make pages look like photocopied scans
+// ============================================================================
+
+export async function scannerEffect(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc || !doc.pdfJsDoc) return;
+
+  const srcDoc    = await PDFDocument.load(doc.pdfBytes);
+  const pdfDoc    = await PDFDocument.create();
+  const pageCount = doc.pdfJsDoc.numPages;
+  const selected  = getSelectedPages();
+  const targets   = new Set(selected.length ? selected : Array.from({ length: pageCount }, (_, i) => i));
+
+  for (let i = 0; i < pageCount; i++) {
+    if (!targets.has(i)) {
+      const [copied] = await pdfDoc.copyPages(srcDoc, [i]);
+      pdfDoc.addPage(copied);
+      continue;
+    }
+
+    const pdfPage = await doc.pdfJsDoc.getPage(i + 1);
+    const viewport = pdfPage.getViewport({ scale: 1.5 });
+    const canvas  = document.createElement('canvas');
+    canvas.width  = viewport.width;
+    canvas.height = viewport.height;
+    const ctx     = canvas.getContext('2d')!;
+    await pdfPage.render({ canvasContext: ctx, viewport, canvas }).promise;
+
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = imgData.data;
+    for (let j = 0; j < d.length; j += 4) {
+      const gray = 0.299 * d[j] + 0.587 * d[j+1] + 0.114 * d[j+2];
+      const c = Math.max(0, Math.min(255, (gray - 128) * 1.15 + 128));
+      d[j]   = Math.min(255, c + 8);
+      d[j+1] = Math.min(255, c + 2);
+      d[j+2] = Math.max(0,   c - 8);
+      const noise = (Math.random() - 0.5) * 10;
+      d[j]   = Math.max(0, Math.min(255, d[j]   + noise));
+      d[j+1] = Math.max(0, Math.min(255, d[j+1] + noise));
+      d[j+2] = Math.max(0, Math.min(255, d[j+2] + noise));
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    const jpegData  = canvas.toDataURL('image/jpeg', 0.82);
+    const jpegBytes = Uint8Array.from(atob(jpegData.split(',')[1]), c => c.charCodeAt(0));
+    const img  = await pdfDoc.embedJpg(jpegBytes);
+    const page = pdfDoc.addPage([viewport.width / 1.5, viewport.height / 1.5]);
+    page.drawImage(img, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() });
+  }
+
+  await savePdfDocToActive(doc, pdfDoc);
+  clearPageSelection();
+}
+
+// ============================================================================
+// Markdown to PDF — convert .md files using pdf-lib
+// ============================================================================
+
+interface MdToken { type: 'h1'|'h2'|'h3'|'p'|'li'|'code'|'hr'|'blank'; text: string }
+
+function parseMd(src: string): MdToken[] {
+  const tokens: MdToken[] = [];
+  const lines = src.split('\n');
+  let inCode = false;
+  let codeBuf: string[] = [];
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (line.startsWith('```')) {
+      if (inCode) {
+        tokens.push({ type: 'code', text: codeBuf.join('\n') });
+        codeBuf = []; inCode = false;
+      } else { inCode = true; }
+      continue;
+    }
+    if (inCode) { codeBuf.push(line); continue; }
+    if (/^---+$/.test(line) || /^\*\*\*+$/.test(line)) { tokens.push({ type: 'hr', text: '' }); continue; }
+    if (line.startsWith('### ')) { tokens.push({ type: 'h3', text: line.slice(4) }); continue; }
+    if (line.startsWith('## '))  { tokens.push({ type: 'h2', text: line.slice(3) }); continue; }
+    if (line.startsWith('# '))   { tokens.push({ type: 'h1', text: line.slice(2) }); continue; }
+    if (/^[-*+] /.test(line))    { tokens.push({ type: 'li', text: '• ' + line.slice(2) }); continue; }
+    if (/^\d+\. /.test(line))    { tokens.push({ type: 'li', text: line.replace(/^\d+\. /, '  ') }); continue; }
+    if (line.trim() === '')      { tokens.push({ type: 'blank', text: '' }); continue; }
+    // strip inline markdown (bold/italic)
+    const text = line.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
+                     .replace(/__(.+?)__/g, '$1').replace(/_(.+?)_/g, '$1')
+                     .replace(/`(.+?)`/g, '$1');
+    tokens.push({ type: 'p', text });
+  }
+  return tokens;
+}
+
+export async function markdownToPdf(): Promise<void> {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.md,.markdown,text/markdown';
+  input.click();
+  const file = await new Promise<File | null>(res => {
+    input.onchange = () => res(input.files?.[0] ?? null);
+    setTimeout(() => res(null), 60000);
+  });
+  if (!file) return;
+
+  const src    = await file.text();
+  const tokens = parseMd(src);
+
+  const pdfDoc  = await PDFDocument.create();
+  const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold    = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const mono    = await pdfDoc.embedFont(StandardFonts.Courier);
+
+  const margin = 56, pageW = 595, pageH = 842;
+  const contentW = pageW - margin * 2;
+  let page = pdfDoc.addPage([pageW, pageH]);
+  let y    = pageH - margin;
+
+  const newPage = () => {
+    page = pdfDoc.addPage([pageW, pageH]);
+    y    = pageH - margin;
+  };
+  const ensureSpace = (needed: number) => { if (y - needed < margin) newPage(); };
+
+  const drawWrapped = (text: string, font: typeof regular, size: number, indent = 0, leading = 1.4) => {
+    const lh    = size * leading;
+    const avail = contentW - indent;
+    const words = text.split(' ');
+    let line    = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (font.widthOfTextAtSize(test, size) > avail && line) {
+        ensureSpace(lh);
+        page.drawText(line, { x: margin + indent, y, size, font, color: rgb(0,0,0) });
+        y -= lh; line = w;
+      } else { line = test; }
+    }
+    if (line) {
+      ensureSpace(lh);
+      page.drawText(line, { x: margin + indent, y, size, font, color: rgb(0,0,0) });
+      y -= lh;
+    }
+  };
+
+  for (const tok of tokens) {
+    switch (tok.type) {
+      case 'h1': ensureSpace(32); drawWrapped(tok.text, bold,    22); y -= 4; break;
+      case 'h2': ensureSpace(28); drawWrapped(tok.text, bold,    17); y -= 3; break;
+      case 'h3': ensureSpace(22); drawWrapped(tok.text, bold,    13); y -= 2; break;
+      case 'p':                   drawWrapped(tok.text, regular, 10);         break;
+      case 'li':                  drawWrapped(tok.text, regular, 10, 12);     break;
+      case 'code': {
+        const lines2 = tok.text.split('\n');
+        const boxH   = lines2.length * 13 + 10;
+        ensureSpace(boxH);
+        page.drawRectangle({ x: margin - 2, y: y - boxH + 13, width: contentW + 4, height: boxH,
+                             color: rgb(0.94, 0.94, 0.94), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 });
+        for (const l of lines2) {
+          page.drawText(l, { x: margin + 4, y, size: 9, font: mono, color: rgb(0.15, 0.15, 0.15) });
+          y -= 13;
+        }
+        y -= 4; break;
+      }
+      case 'hr':
+        ensureSpace(16);
+        page.drawLine({ start: { x: margin, y }, end: { x: pageW - margin, y },
+                        thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
+        y -= 12; break;
+      case 'blank': y -= 6; break;
+    }
+  }
+
+  const baseName = file.name.replace(/\.(md|markdown)$/i, '') || 'document';
+  await createDocumentFromBytes(await pdfDoc.save(), `${baseName}.pdf`);
+}
+
+// ============================================================================
+// PDF to SVG — export pages as SVG files (image-backed)
+// ============================================================================
+
+export async function pdfToSvg(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc || !doc.pdfJsDoc) return;
+
+  const selected  = getSelectedPages();
+  const pageNums  = selected.length ? selected.map(i => i + 1) : [doc.currentPage];
+  const baseName  = doc.fileName.replace(/\.pdf$/i, '');
+
+  for (const pageNum of pageNums) {
+    const pdfPage  = await doc.pdfJsDoc.getPage(pageNum);
+    const viewport = pdfPage.getViewport({ scale: 2 });
+    const canvas   = document.createElement('canvas');
+    canvas.width   = viewport.width;
+    canvas.height  = viewport.height;
+    const ctx      = canvas.getContext('2d')!;
+    await pdfPage.render({ canvasContext: ctx, viewport, canvas }).promise;
+
+    const pngDataUrl = canvas.toDataURL('image/png');
+    const w = viewport.width / 2, h = viewport.height / 2;
+    const svg = [
+      `<?xml version="1.0" encoding="UTF-8"?>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"`,
+      `     width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`,
+      `  <image x="0" y="0" width="${w}" height="${h}" xlink:href="${pngDataUrl}"/>`,
+      `</svg>`,
+    ].join('\n');
+
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${baseName}_page_${pageNum}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  clearPageSelection();
+}
+
+// ============================================================================
+// Deskew PDF — detect and correct page skew using projection profile method
+// ============================================================================
+
+/**
+ * Detect the skew angle of a rendered page canvas.
+ * Uses the horizontal projection profile variance method:
+ * the angle that makes text lines most "sharp" (highest row-sum variance)
+ * is the deskew angle.
+ *
+ * Returns angle in degrees (positive = clockwise skew that needs CCW correction).
+ */
+function detectSkewAngle(canvas: HTMLCanvasElement): number {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return 0;
+
+  const { width: W, height: H } = canvas;
+  const data = ctx.getImageData(0, 0, W, H).data;
+
+  // Build binary image: 1 = dark pixel (ink), 0 = light (background)
+  const binary = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
+    binary[i] = (0.299 * r + 0.587 * g + 0.114 * b) < 180 ? 1 : 0;
+  }
+
+  // Collect dark pixel coordinates with subsampling to prevent UI thread blocking
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const cx = W / 2, cy = H / 2;
+  let pixelCount = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (binary[y * W + x]) {
+        pixelCount++;
+        if (pixelCount % 5 === 0) {
+          xs.push(x - cx);
+          ys.push(y - cy);
+        }
+      }
+    }
+  }
+
+  let bestAngle = 0;
+  let bestScore = -1;
+
+  // Coarse scan: -12° to +12° in 1° steps
+  const testAngles: number[] = [];
+  for (let a = -12; a <= 12; a += 1) testAngles.push(a);
+
+  const measure = (angleDeg: number): number => {
+    const rad = (angleDeg * Math.PI) / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    const projSize = Math.round(Math.abs(W * sin) + Math.abs(H * cos)) + 2;
+    const half = projSize / 2;
+    const proj = new Int32Array(projSize);
+    for (let i = 0; i < xs.length; i++) {
+      // Rotate pixel around centre
+      const ry = xs[i] * sin + ys[i] * cos;
+      const row = Math.round(ry + half);
+      if (row >= 0 && row < projSize) proj[row]++;
+    }
+    // Variance of projection = sharpness score
+    let sum = 0, sum2 = 0;
+    for (let j = 0; j < projSize; j++) { sum += proj[j]; sum2 += proj[j] * proj[j]; }
+    const mean = sum / projSize;
+    return sum2 / projSize - mean * mean;
+  };
+
+  for (const a of testAngles) {
+    const score = measure(a);
+    if (score > bestScore) { bestScore = score; bestAngle = a; }
+  }
+
+  // Fine scan: ±1° around best coarse angle in 0.2° steps
+  for (let a = bestAngle - 1; a <= bestAngle + 1; a += 0.2) {
+    const score = measure(a);
+    if (score > bestScore) { bestScore = score; bestAngle = a; }
+  }
+
+  return bestAngle;
+}
+
+export async function deskewPdf(): Promise<void> {
+  const doc = getActiveDocument();
+  if (!doc || !doc.pdfJsDoc) return;
+
+  const selected = getSelectedPages();
+  const pageIndices = selected.length > 0
+    ? selected
+    : Array.from({ length: doc.pdfJsDoc.numPages }, (_, i) => i);
+
+  const THRESHOLD = 0.4; // minimum angle (degrees) worth correcting
+  const DETECT_SCALE = 0.8; // scale for angle-detection render
+  const RENDER_SCALE = 1.5; // scale for final high-quality render
+
+  const srcDoc = await PDFDocument.load(doc.pdfBytes, { ignoreEncryption: true });
+  const newDoc = await PDFDocument.create();
+  const srcPages = srcDoc.getPages();
+  const totalPages = srcPages.length;
+  const pageSet = new Set(pageIndices);
+
+  let correctedCount = 0;
+
+  for (let i = 0; i < totalPages; i++) {
+    if (!pageSet.has(i)) {
+      // Keep page as-is
+      const [copied] = await newDoc.copyPages(srcDoc, [i]);
+      newDoc.addPage(copied);
+      continue;
+    }
+
+    const pdfPage = await doc.pdfJsDoc.getPage(i + 1);
+
+    // --- Step 1: detect skew on a small render ---
+    const detViewport = pdfPage.getViewport({ scale: DETECT_SCALE });
+    const detCanvas = document.createElement('canvas');
+    detCanvas.width  = Math.round(detViewport.width);
+    detCanvas.height = Math.round(detViewport.height);
+    const detCtx = detCanvas.getContext('2d')!;
+    detCtx.fillStyle = 'white';
+    detCtx.fillRect(0, 0, detCanvas.width, detCanvas.height);
+    await pdfPage.render({ canvasContext: detCtx, viewport: detViewport, canvas: detCanvas }).promise;
+
+    const angle = detectSkewAngle(detCanvas);
+
+    if (Math.abs(angle) < THRESHOLD) {
+      // Straight enough — copy without change
+      const [copied] = await newDoc.copyPages(srcDoc, [i]);
+      newDoc.addPage(copied);
+      continue;
+    }
+
+    correctedCount++;
+
+    // --- Step 2: render page at full quality ---
+    const fullViewport = pdfPage.getViewport({ scale: RENDER_SCALE });
+    const fullCanvas = document.createElement('canvas');
+    fullCanvas.width  = Math.round(fullViewport.width);
+    fullCanvas.height = Math.round(fullViewport.height);
+    const fullCtx = fullCanvas.getContext('2d')!;
+    fullCtx.fillStyle = 'white';
+    fullCtx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
+    await pdfPage.render({ canvasContext: fullCtx, viewport: fullViewport, canvas: fullCanvas }).promise;
+
+    // --- Step 3: rotate canvas by -angle to correct skew ---
+    const rad = (-angle * Math.PI) / 180;
+    const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+    const FW = fullCanvas.width, FH = fullCanvas.height;
+    const newW = Math.round(FW * cos + FH * sin);
+    const newH = Math.round(FH * cos + FW * sin);
+
+    const rotCanvas = document.createElement('canvas');
+    rotCanvas.width  = newW;
+    rotCanvas.height = newH;
+    const rotCtx = rotCanvas.getContext('2d')!;
+    rotCtx.fillStyle = 'white';
+    rotCtx.fillRect(0, 0, newW, newH);
+    rotCtx.save();
+    rotCtx.translate(newW / 2, newH / 2);
+    rotCtx.rotate(rad);
+    rotCtx.drawImage(fullCanvas, -FW / 2, -FH / 2);
+    rotCtx.restore();
+
+    // --- Step 4: embed rotated image into a new page ---
+    const jpegBytes = await new Promise<Uint8Array>((resolve, reject) => {
+      rotCanvas.toBlob(blob => {
+        if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
+        blob.arrayBuffer().then(ab => resolve(new Uint8Array(ab)));
+      }, 'image/jpeg', 0.92);
+    });
+    const embedded = await newDoc.embedJpg(jpegBytes);
+
+    // Keep original page dimensions (aspect may shift slightly — crop to original size)
+    const srcPage = srcPages[i];
+    const { width: pgW, height: pgH } = srcPage.getSize();
+    const newPage = newDoc.addPage([pgW, pgH]);
+    newPage.drawImage(embedded, { x: 0, y: 0, width: pgW, height: pgH });
+  }
+
+  clearPageSelection();
+  await savePdfDocToActive(doc, newDoc);
+
+  const msg = correctedCount > 0
+    ? `Deskewed ${correctedCount} page(s). ${totalPages - correctedCount - (totalPages - pageIndices.length)} page(s) were already straight.`
+    : 'No significant skew detected — all selected pages are already straight.';
+  showAlert('Deskew Complete', msg);
+}
+
 // Minimal UI helper (deferred to main.ts alert)
 function showAlert(title: string, message: string) {
   const event = new CustomEvent('bentopdf-show-alert', { detail: { title, message } });
@@ -1273,7 +2137,21 @@ export default {
   textToPdf,
   jsonToPdf,
   pdfToJson,
+  pdfToTxt,
+  pdfToDocx,
   copyPages,
   cutPages,
   pastePages,
+  alternateMerge,
+  addPageLabels,
+  batesNumbering,
+  rotateCustom,
+  bundleToZip,
+  pdfOverlay,
+  extractImages,
+  pdfBooklet,
+  scannerEffect,
+  markdownToPdf,
+  pdfToSvg,
+  deskewPdf,
 };

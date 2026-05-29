@@ -39,8 +39,8 @@ jobs:
           # Branch to store signatures
           branch: 'main'
           
-          # Allowlist for bot accounts (won't need to sign CLA)
-          allowlist: 'bot*,*[bot],dependabot*,renovate*,github-actions*'
+          # Allowlist for bot accounts and repo owner (won't need to sign CLA)
+          allowlist: 'bot*,*[bot],dependabot*,renovate*,github-actions*,aipankajsinghal'
           
           # Custom messages
           custom-notsigned-prcomment: |

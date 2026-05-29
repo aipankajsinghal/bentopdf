@@ -25,6 +25,9 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install NASM (required by ring/rustls for x86_64 Windows)
+        uses: ilammy/setup-nasm@v1
+
       - name: Install dependencies
         run: npm ci
 

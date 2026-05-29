@@ -108,6 +108,25 @@ async function renderCurrentPage(doc: Document): Promise<void> {
     // TODO: Re-enable text layer rendering with proper PDF.js v5 API
     if (textLayerDiv) {
         textLayerDiv.innerHTML = ''; // Clear previous
+        // Ensure absolute positioning match
+        textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
+        textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
+        // CSS transform to match scaling if necessary, usually pdf.js text layer needs explicit vars
+        textLayerDiv.style.setProperty('--scale-factor', String(currentZoom));
+
+        const textContent = await page.getTextContent();
+        // Detect RTL content (Arabic / Hebrew) for correct text direction
+        const hasRTL = textContent.items.some((item: any) =>
+            item.str && /[؀-ۿ֐-׿]/.test(item.str)
+        );
+        textLayerDiv.dir = hasRTL ? 'rtl' : 'ltr';
+
+        const textLayer = new pdfjsLib.TextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport,
+        });
+        await textLayer.render();
     }
 
   } catch (error) {
