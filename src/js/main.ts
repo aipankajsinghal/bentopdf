@@ -507,29 +507,6 @@ function setupSettingsModal(): void {
     });
   }
 
-  // API Key handling
-  const apiKeyInput = document.getElementById('gemini-api-key') as HTMLInputElement;
-  const saveKeyBtn = document.getElementById('save-api-key-btn');
-  const keyStatus = document.getElementById('api-key-status');
-
-  if (apiKeyInput && saveKeyBtn) {
-    // Load existing key
-    if (aiClient.hasKey()) {
-      apiKeyInput.value = aiClient.getApiKey();
-    }
-
-    saveKeyBtn.addEventListener('click', async () => {
-      const key = apiKeyInput.value.trim();
-      if (key) {
-        await aiClient.setApiKey(key);
-        if (keyStatus) {
-          keyStatus.textContent = 'Key saved!';
-          keyStatus.classList.remove('hidden');
-          setTimeout(() => keyStatus.classList.add('hidden'), 2000);
-        }
-      }
-    });
-  }
 }
 
 // ============================================================================

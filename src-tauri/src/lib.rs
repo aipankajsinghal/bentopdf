@@ -18,6 +18,66 @@ fn gemini_url(key: &str) -> String {
     )
 }
 
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
+    if hex.len() % 2 != 0 {
+        return Err("invalid hex length".to_string());
+    }
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|e| e.to_string()))
+        .collect()
+}
+
+fn load_or_create_app_key(config_dir: &std::path::Path) -> Result<[u8; 32], String> {
+    use rand::RngCore;
+    let key_path = config_dir.join("app_key.bin");
+    if key_path.exists() {
+        let bytes = std::fs::read(&key_path).map_err(|e| e.to_string())?;
+        if bytes.len() == 32 {
+            let mut key = [0u8; 32];
+            key.copy_from_slice(&bytes);
+            return Ok(key);
+        }
+    }
+    let mut key = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut key);
+    std::fs::write(&key_path, &key).map_err(|e| e.to_string())?;
+    Ok(key)
+}
+
+fn encrypt_api_key(plaintext: &str, key: &[u8; 32]) -> Result<String, String> {
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    use aes_gcm::aead::Aead;
+    use rand::RngCore;
+    let cipher = Aes256Gcm::new(key.into());
+    let mut nonce_bytes = [0u8; 12];
+    rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher.encrypt(nonce, plaintext.as_bytes()).map_err(|e| e.to_string())?;
+    let mut combined = Vec::with_capacity(12 + ciphertext.len());
+    combined.extend_from_slice(&nonce_bytes);
+    combined.extend_from_slice(&ciphertext);
+    Ok(bytes_to_hex(&combined))
+}
+
+fn decrypt_api_key(hex_data: &str, key: &[u8; 32]) -> Result<String, String> {
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    use aes_gcm::aead::Aead;
+    let combined = hex_to_bytes(hex_data)?;
+    if combined.len() < 12 {
+        return Err("encrypted data too short".to_string());
+    }
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let cipher = Aes256Gcm::new(key.into());
+    let nonce = Nonce::from_slice(nonce_bytes);
+    let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|e| e.to_string())?;
+    String::from_utf8(plaintext).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn ai_set_key(key: String, state: State<'_, ApiKeyState>, app: AppHandle) -> Result<(), String> {
     {
@@ -26,7 +86,13 @@ async fn ai_set_key(key: String, state: State<'_, ApiKeyState>, app: AppHandle) 
     }
     if let Ok(config_dir) = app.path().app_config_dir() {
         std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-        let content = serde_json::json!({ "gemini_key": key }).to_string();
+        let content = if key.is_empty() {
+            "{}".to_string()
+        } else {
+            let app_key = load_or_create_app_key(&config_dir)?;
+            let encrypted = encrypt_api_key(&key, &app_key)?;
+            serde_json::json!({ "gemini_key_enc": encrypted }).to_string()
+        };
         std::fs::write(config_dir.join("ai_config.json"), content).map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -95,12 +161,29 @@ pub fn run() {
             // Load persisted Gemini API key
             if let Ok(config_dir) = app.path().app_config_dir() {
                 let config_file = config_dir.join("ai_config.json");
-                if let Ok(content) = std::fs::read_to_string(config_file) {
+                if let Ok(content) = std::fs::read_to_string(&config_file) {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(key) = json["gemini_key"].as_str() {
+                        if let Some(enc) = json["gemini_key_enc"].as_str() {
+                            // Encrypted key path
+                            if let Ok(app_key) = load_or_create_app_key(&config_dir) {
+                                if let Ok(key) = decrypt_api_key(enc, &app_key) {
+                                    if !key.is_empty() {
+                                        let state = app.state::<ApiKeyState>();
+                                        *state.0.lock().unwrap() = Some(key);
+                                    }
+                                }
+                            }
+                        } else if let Some(key) = json["gemini_key"].as_str() {
+                            // Migrate plaintext key to encrypted storage
                             if !key.is_empty() {
                                 let state = app.state::<ApiKeyState>();
                                 *state.0.lock().unwrap() = Some(key.to_string());
+                                if let Ok(app_key) = load_or_create_app_key(&config_dir) {
+                                    if let Ok(encrypted) = encrypt_api_key(key, &app_key) {
+                                        let new_content = serde_json::json!({ "gemini_key_enc": encrypted }).to_string();
+                                        let _ = std::fs::write(&config_file, new_content);
+                                    }
+                                }
                             }
                         }
                     }
