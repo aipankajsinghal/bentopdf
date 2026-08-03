@@ -67,7 +67,7 @@
     "blob-stream": "^0.1.3",
     "cropperjs": "^1.6.1",
     "docx": "^9.7.1",
-    "embedpdf-snippet": "file:vendor/embedpdf/embedpdf-snippet-2.14.3.tgz",
+    "embedpdf-snippet": "file:vendor/embedpdf/embedpdf-snippet-2.14.4.tgz",
     "heic2any": "^0.0.4",
     "html2canvas": "^1.4.1",
     "i18next": "^25.7.2",
